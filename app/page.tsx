@@ -18,11 +18,11 @@ export default function Home() {
   }, []);
 
   const filteredData = data.filter(item => 
-    item.nick.toLowerCase().includes(search.toLowerCase())
+    item?.nick?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalMessages = data.reduce((sum, item) => sum + item.messages, 0);
-  const totalTopics = data.reduce((sum, item) => sum + item.topics, 0);
+  const totalMessages = data.reduce((sum, item) => sum + (item?.messages || 0), 0);
+  const totalTopics = data.reduce((sum, item) => sum + (item?.topics || 0), 0);
   const topUsersForChart = data.slice(0, 7); // Grafik için en aktif 7 kişi
 
   if (loading) {
