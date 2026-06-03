@@ -117,6 +117,6 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true, user: global.cachedBotData[nick] });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message },  { status: 500 });
   }
 }
