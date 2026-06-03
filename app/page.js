@@ -151,7 +151,7 @@ export default function Home() {
                       <td className="p-4">
                         {item.avatarUrl ? (
                           <img
-                            src={item.avatarUrl}
+                            src={`/api/avatar?src=${encodeURIComponent(item.avatarUrl)}`}
                             alt=""
                             className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
                             onError={(e) => { e.target.style.display = 'none'; }}
