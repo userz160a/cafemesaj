@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+
+global.cachedBotData = global.cachedBotData || {};
+global.lastScrapedTime = global.lastScrapedTime || {};
 
 async function scrapeExternalData(nick) {
   try {
@@ -40,38 +42,39 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
 
   if (searchParams.get('clear') === 'true') {
-    const keys = await kv.keys('user:*');
-    if (keys.length > 0) await kv.del(...keys);
+    global.cachedBotData = {};
     return new NextResponse("Tüm veriler temizlendi!");
   }
 
-  const keys = await kv.keys('user:*');
-  const data = [];
   const now = Date.now();
+  const entries = Object.entries(global.cachedBotData);
 
-  for (const key of keys) {
-    const info = await kv.get(key);
-    if (!info) continue;
-    const nick = key.replace('user:', '');
-
-    if (now - (info.lastScraped || 0) > 5 * 60 * 1000 || !info.avatarUrl) {
+  const scrapePromises = entries.map(async ([nick, info]) => {
+    const lastScraped = global.lastScrapedTime[nick] || 0;
+    if (now - lastScraped > 5 * 60 * 1000 || !info.avatarUrl) {
+      global.lastScrapedTime[nick] = now;
       const scraped = await scrapeExternalData(nick);
-      info.avatarUrl = scraped.avatarUrl || info.avatarUrl || '';
-      info.danceGifUrl = scraped.danceGifUrl || info.danceGifUrl || '';
-      info.lastScraped = now;
-      await kv.set(key, info);
+      if (global.cachedBotData[nick]) {
+        global.cachedBotData[nick].avatarUrl = scraped.avatarUrl || global.cachedBotData[nick].avatarUrl;
+        global.cachedBotData[nick].danceGifUrl = scraped.danceGifUrl || global.cachedBotData[nick].danceGifUrl;
+      }
     }
+  });
 
-    data.push({
+  await Promise.all(scrapePromises.slice(0, 5));
+
+  const data = Object.entries(global.cachedBotData).map(([nick, info]) => {
+    const date = info.osTime ? new Date(info.osTime * 1000).toLocaleString('tr-TR') : 'Unknown';
+    return {
       nick,
       messages: info.messages || 0,
       topics: info.topics || 0,
       total: (info.messages || 0) + (info.topics || 0),
-      lastSeen: info.osTime ? new Date(info.osTime * 1000).toLocaleString('tr-TR') : 'Unknown',
+      lastSeen: date,
       avatarUrl: info.avatarUrl || '',
       danceGifUrl: info.danceGifUrl || ''
-    });
-  }
+    };
+  });
 
   data.sort((a, b) => b.total - a.total);
   return NextResponse.json(data);
@@ -84,36 +87,35 @@ export async function POST(request) {
 
     if (!nick) return NextResponse.json({ error: 'Missing nick' }, { status: 400 });
 
-    const key = `user:${nick}`;
-    const existing = await kv.get(key) || {
-      messages: 0,
-      topics: 0,
-      osTime: 0,
-      avatarUrl: '',
-      danceGifUrl: '',
-      lastScraped: 0,
-      messagesHistory: []
-    };
+    if (!global.cachedBotData[nick]) {
+      global.cachedBotData[nick] = {
+        messages: 0,
+        topics: 0,
+        osTime: 0,
+        avatarUrl: '',
+        danceGifUrl: '',
+        messagesHistory: []
+      };
+    }
 
-    if (osTime) existing.osTime = osTime;
-    if (addTopic) existing.topics += 1;
+    if (osTime) global.cachedBotData[nick].osTime = osTime;
+    if (addTopic) global.cachedBotData[nick].topics += 1;
 
     if (addMessage) {
       if (messageContent) {
         const clean = messageContent.trim().replace(/\r/g, "");
-        const history = existing.messagesHistory || [];
+        const history = global.cachedBotData[nick].messagesHistory || [];
         if (!history.includes(clean)) {
           history.push(clean);
-          existing.messages += 1;
-          existing.messagesHistory = history.slice(-200);
+          global.cachedBotData[nick].messages += 1;
+          global.cachedBotData[nick].messagesHistory = history.slice(-200);
         }
       } else {
-        existing.messages += 1;
+        global.cachedBotData[nick].messages += 1;
       }
     }
 
-    await kv.set(key, existing);
-    return NextResponse.json({ success: true, user: existing });
+    return NextResponse.json({ success: true, user: global.cachedBotData[nick] });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
