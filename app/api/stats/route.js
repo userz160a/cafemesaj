@@ -12,10 +12,10 @@ async function scrapeAvatar(nick) {
       const regex = /http:\/\/avatars\.atelier801\.com\/[^"'\s>]+/g;
       const matches = html.match(regex);
       if (matches && matches.length >= 2) {
-        return matches[1].split('?')[0];
+        return matches[1].split('?')[0].replace('http://', 'https://');
       }
       if (matches && matches.length === 1) {
-        return matches[0].split('?')[0];
+        return matches[0].split('?')[1].replace('http://', 'https://');
       }
     }
   } catch (err) {}
