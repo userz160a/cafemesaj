@@ -29,7 +29,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const filteredData = (data || []).filter(item => 
+  const filteredData = (data || []).filter(item =>
     item && item.nick && item.nick.toLowerCase().includes((search || '').toLowerCase())
   );
 
@@ -65,18 +65,13 @@ export default function Home() {
   return (
     <div className={`min-h-screen p-4 md:p-6 font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
-        
-        {/* Top Navbar */}
+
         <div className={`flex items-center justify-between border-b pb-4 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
-              Cafe Rank
-            </h1>
-          </div>
-          
+          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
+            Cafe Rank
+          </h1>
           <div className="flex items-center gap-4">
-            {/* Custom Theme Switcher Switch */}
-            <button 
+            <button
               onClick={() => setDarkMode(!darkMode)}
               className="relative w-16 h-8 flex items-center bg-amber-500 rounded-full p-1 cursor-pointer transition-colors duration-300 outline-none border-none"
             >
@@ -84,8 +79,7 @@ export default function Home() {
                 {darkMode ? <Moon size={14} className="text-amber-500" /> : <Sun size={14} className="text-amber-500" />}
               </div>
             </button>
-            
-            <button 
+            <button
               onClick={fetchData}
               className={`p-2 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
             >
@@ -94,7 +88,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Küçük Üst İstatistikler (Resimsiz) */}
         <div className="grid grid-cols-3 gap-3 max-w-2xl">
           <div className={`p-3 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-sm'}`}>
             <MessageSquare size={16} className="text-blue-500" />
@@ -119,13 +112,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Arama Barı ve Tablo Konteyneri */}
         <div className={`rounded-xl border overflow-hidden ${darkMode ? 'bg-slate-800/30 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div className={`p-3 border-b flex items-center gap-3 ${darkMode ? 'border-slate-700 bg-slate-800/20' : 'border-slate-200 bg-slate-50'}`}>
             <Search className={darkMode ? 'text-slate-500' : 'text-slate-400'} size={16} />
-            <input 
-              type="text" 
-              placeholder="Kullanıcı adı ara..." 
+            <input
+              type="text"
+              placeholder="Kullanıcı adı ara..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={`bg-transparent border-none outline-none text-sm w-full ${darkMode ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'}`}
@@ -138,7 +130,6 @@ export default function Home() {
                 <tr className={`border-b text-xs font-bold uppercase tracking-wider ${darkMode ? 'border-slate-700 text-slate-400 bg-slate-800/10' : 'border-slate-200 text-slate-500 bg-slate-50'}`}>
                   <th className="p-4 w-12 text-center">Sıra</th>
                   <th className="p-4 w-16">Profil</th>
-                  <th className="p-4 w-24">Görünüm</th>
                   <th className="p-4">Kullanıcı Adı</th>
                   <th className="p-4">Konular</th>
                   <th className="p-4">Mesajlar</th>
@@ -149,7 +140,7 @@ export default function Home() {
               <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                 {filteredData.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
+                    <td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
                   </tr>
                 ) : (
                   filteredData.map((item, index) => (
@@ -157,40 +148,19 @@ export default function Home() {
                       <td className="p-4 text-center font-bold">
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </td>
-                      
-                      {/* 1. Profil Resmi */}
                       <td className="p-4">
                         {item.avatarUrl ? (
-                          <img 
-                            src={item.avatarUrl} 
-                            alt="" 
-                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30" 
+                          <img
+                            src={item.avatarUrl}
+                            alt=""
+                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
                         ) : (
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>M</div>
                         )}
                       </td>
-                      
-                      {/* 2. Dressing (Danse) Gifi */}
-                      <td className="p-4">
-                        {item.danceGifUrl ? (
-                          <img 
-                            src={item.danceGifUrl} 
-                            alt="" 
-                            className="h-12 w-auto object-contain min-w-[40px]"
-                            unoptimized="true"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-400">-</span>
-                        )}
-                      </td>
-                      
-                      {/* 3. Nick ve Diğer Bilgiler */}
-                      <td className={`p-4 ${getRankColor(index)}`}>
-                        {item.nick}
-                      </td>
+                      <td className={`p-4 ${getRankColor(index)}`}>{item.nick}</td>
                       <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
                       <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
                       <td className="p-4 font-bold">{item.total}</td>
