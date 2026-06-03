@@ -11,6 +11,7 @@ if (Object.keys(global.cachedBotData).length === 0) {
     if (fs.existsSync(filePath)) {
       const fileContent = fs.readFileSync(filePath, 'utf-8');
       const lines = fileContent.split(/\r?\n/);
+      
       const regex = /\["([^"]+)"\]\s*=\s*\{\s*messages\s*=\s*(\d+)\s*,\s*topics\s*=\s*(\d+)\s*,\s*lastonlineostime\s*=\s*(\d+)\s*\}/;
 
       lines.forEach(line => {
@@ -22,7 +23,8 @@ if (Object.keys(global.cachedBotData).length === 0) {
             topics: parseInt(topics) || 0,
             osTime: parseInt(osTime) || 0,
             avatarUrl: '',
-            danceGifUrl: ''
+            danceGifUrl: '',
+            messagesHistory: []
           };
         }
       });
@@ -63,7 +65,6 @@ async function scrapeExternalData(nick) {
 
     return { avatarUrl, danceGifUrl };
   } catch (err) {
-    console.error(`Scraping failed for ${nick}:`, err);
     return { avatarUrl: '', danceGifUrl: '' };
   }
 }
@@ -78,15 +79,19 @@ export async function GET(request) {
   const now = Date.now();
   const entries = Object.entries(global.cachedBotData);
 
-  for (const [nick, info] of entries) {
+  const scrapePromises = entries.map(async ([nick, info]) => {
     const lastScraped = global.lastScrapedTime[nick] || 0;
     if (now - lastScraped > 5 * 60 * 1000 || !info.avatarUrl) {
-      const scraped = await scrapeExternalData(nick);
-      global.cachedBotData[nick].avatarUrl = scraped.avatarUrl || info.avatarUrl;
-      global.cachedBotData[nick].danceGifUrl = scraped.danceGifUrl || info.danceGifUrl;
       global.lastScrapedTime[nick] = now;
+      const scraped = await scrapeExternalData(nick);
+      if (global.cachedBotData[nick]) {
+        global.cachedBotData[nick].avatarUrl = scraped.avatarUrl || global.cachedBotData[nick].avatarUrl;
+        global.cachedBotData[nick].danceGifUrl = scraped.danceGifUrl || global.cachedBotData[nick].danceGifUrl;
+      }
     }
-  }
+  });
+
+  await Promise.all(scrapePromises.slice(0, 5));
 
   const data = Object.entries(global.cachedBotData).map(([nick, info]) => {
     const date = info.osTime ? new Date(info.osTime * 1000).toLocaleString('tr-TR') : 'Unknown';
@@ -108,17 +113,36 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { nick, addMessage, addTopic, osTime } = body;
+    const { nick, addMessage, addTopic, osTime, messageContent } = body;
 
     if (!nick) return NextResponse.json({ error: 'Missing nick' }, { status: 400 });
 
     if (!global.cachedBotData[nick]) {
-      global.cachedBotData[nick] = { messages: 0, topics: 0, osTime: 0, avatarUrl: '', danceGifUrl: '' };
+      global.cachedBotData[nick] = { 
+        messages: 0, 
+        topics: 0, 
+        osTime: 0, 
+        avatarUrl: '', 
+        danceGifUrl: '',
+        messagesHistory: [] 
+      };
     }
 
-    if (addMessage) global.cachedBotData[nick].messages += 1;
-    if (addTopic) global.cachedBotData[nick].topics += 1;
     if (osTime) global.cachedBotData[nick].osTime = osTime;
+    if (addTopic) global.cachedBotData[nick].topics += 1;
+
+    if (addMessage) {
+      if (messageContent) {
+        const history = global.cachedBotData[nick].messagesHistory || [];
+        if (!history.includes(messageContent)) {
+          history.push(messageContent);
+          global.cachedBotData[nick].messages += 1;
+          global.cachedBotData[nick].messagesHistory = history.slice(-100);
+        }
+      } else {
+        global.cachedBotData[nick].messages += 1;
+      }
+    }
 
     return NextResponse.json({ success: true, user: global.cachedBotData[nick] });
   } catch (error) {
