@@ -5,40 +5,57 @@ import path from 'path';
 global.cachedBotData = global.cachedBotData || {};
 global.lastScrapedTime = global.lastScrapedTime || {};
 
-if (Object.keys(global.cachedBotData).length === 0) {
+const filePath = path.join(process.cwd(), 'bot.txt');
+
+function loadDataFromFile() {
   try {
-    const filePath = path.join(process.cwd(), 'bot.txt');
     if (fs.existsSync(filePath)) {
       const fileContent = fs.readFileSync(filePath, 'utf-8');
       const lines = fileContent.split(/\r?\n/);
-      
-      const regex = /\["([^"]+)"\]\s*=\s*\{\s*messages\s*=\s*(\d+)\s*,\s*topics\s*=\s*(\d+)\s*,\s*lastonlineostime\s*=\s*(\d+)\s*\}/;
+      const regex = /\["([^"]+)"\]\s*=\s*\{\s*messages\s*=\s*(\d+)\s*,\s*topics\s*=\s*(\d+)\s*,\s*lastonlineostime\s*=\s*(\d+)\s*\}/i;
 
       lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
           const [_, nick, messages, topics, osTime] = match;
-          global.cachedBotData[nick] = {
-            messages: parseInt(messages) || 0,
-            topics: parseInt(topics) || 0,
-            osTime: parseInt(osTime) || 0,
-            avatarUrl: '',
-            danceGifUrl: '',
-            messagesHistory: []
-          };
+          if (!global.cachedBotData[nick] || parseInt(osTime) > (global.cachedBotData[nick].osTime || 0)) {
+            global.cachedBotData[nick] = {
+              messages: parseInt(messages) || 0,
+              topics: parseInt(topics) || 0,
+              osTime: parseInt(osTime) || 0,
+              avatarUrl: global.cachedBotData[nick]?.avatarUrl || '',
+              danceGifUrl: global.cachedBotData[nick]?.danceGifUrl || '',
+              messagesHistory: global.cachedBotData[nick]?.messagesHistory || []
+            };
+          }
         }
       });
     }
   } catch (e) {
-    console.log("Initial load error:", e);
+    console.log("File load error:", e);
   }
+}
+
+function saveDataToFile() {
+  try {
+    const lines = Object.entries(global.cachedBotData).map(([nick, info]) => {
+      return `["${nick}"] = {messages = ${info.messages}, topics = ${info.topics}, lastonlineostime = ${info.osTime}}`;
+    });
+    fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
+  } catch (e) {
+    console.log("File save error:", e);
+  }
+}
+
+if (Object.keys(global.cachedBotData).length === 0) {
+  loadDataFromFile();
 }
 
 async function scrapeExternalData(nick) {
   try {
     const cleanNickForUrl = nick.replace('#', '%2523');
     const cypherUrl = `https://projects.cypher801.app/profile/?player=${cleanNickForUrl}`;
-    const cypherRes = await fetch(cypherUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const cypherRes = await fetch(cypherUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } });
     let danceGifUrl = '';
     
     if (cypherRes.ok) {
@@ -73,8 +90,11 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   if (searchParams.get('clear') === 'true') {
     global.cachedBotData = {};
+    if (fs.existsSync(filePath)) fs.writeFileSync(filePath, '', 'utf-8');
     return new NextResponse("All data has been successfully cleared!");
   }
+
+  loadDataFromFile();
 
   const now = Date.now();
   const entries = Object.entries(global.cachedBotData);
@@ -112,6 +132,8 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    loadDataFromFile();
+
     const body = await request.json();
     const { nick, addMessage, addTopic, osTime, messageContent } = body;
 
@@ -133,16 +155,20 @@ export async function POST(request) {
 
     if (addMessage) {
       if (messageContent) {
+        const cleanContent = messageContent.trim().replace(/\r/g, "");
         const history = global.cachedBotData[nick].messagesHistory || [];
-        if (!history.includes(messageContent)) {
-          history.push(messageContent);
+        
+        if (!history.includes(cleanContent)) {
+          history.push(cleanContent);
           global.cachedBotData[nick].messages += 1;
-          global.cachedBotData[nick].messagesHistory = history.slice(-100);
+          global.cachedBotData[nick].messagesHistory = history.slice(-200);
         }
       } else {
         global.cachedBotData[nick].messages += 1;
       }
     }
+
+    saveDataToFile();
 
     return NextResponse.json({ success: true, user: global.cachedBotData[nick] });
   } catch (error) {
