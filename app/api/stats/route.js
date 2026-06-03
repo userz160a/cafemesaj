@@ -64,7 +64,7 @@ export async function GET(request) {
   await Promise.all(scrapePromises.slice(0, 5));
 
   const data = Object.entries(global.cachedBotData).map(([nick, info]) => {
-    const date = info.osTime ? new Date(info.osTime * 1000).toLocaleString('tr-TR') : 'Unknown';
+    const date = info.osTime ? new Date((info.osTime + 10800) * 1000).toLocaleString('tr-TR') : 'Unknown';
     return {
       nick,
       messages: info.messages || 0,
