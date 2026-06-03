@@ -2,126 +2,140 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-global.cachedBotData = global.cachedBotData || {};
-global.lastScrapedTime = global.lastScrapedTime || {};
+const filePath = path.join(process.cwd(), 'bot.txt');
+const cache = new Map();
 
-if (Object.keys(global.cachedBotData).length === 0) {
-  try {
-    const filePath = path.join(process.cwd(), 'bot.txt');
-    if (fs.existsSync(filePath)) {
-      const fileContent = fs.readFileSync(filePath, 'utf-8');
-      const lines = fileContent.split(/\r?\n/);
-      const regex = /\["([^"]+)"\]\s*=\s*\{\s*messages\s*=\s*(\d+)\s*,\s*topics\s*=\s*(\d+)\s*,\s*lastonlineostime\s*=\s*(\d+)\s*\}/;
+function updateExtDataBackground(nick) {
+    const cleanNickForAtelier = encodeURIComponent(nick.split('#')[0]);
+    const cleanNickForCypher = encodeURIComponent(nick.toLowerCase());
 
-      lines.forEach(line => {
-        const match = line.match(regex);
-        if (match) {
-          const [_, nick, messages, topics, osTime] = match;
-          global.cachedBotData[nick] = {
-            messages: parseInt(messages) || 0,
-            topics: parseInt(topics) || 0,
-            osTime: parseInt(osTime) || 0,
-            avatarUrl: '',
-            danceGifUrl: ''
-          };
+    fetch(`https://atelier801.com/profile?pr=${cleanNickForAtelier}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    })
+    .then(res => res.text())
+    .then(html => {
+        const matches = [...html.matchAll(/http:\/\/avatars\.atelier801\.com\/[^"'\s>]+/g)];
+        let avatarUrl = '';
+        if (matches.length >= 2) avatarUrl = matches[1][0];
+        else if (matches.length > 0) avatarUrl = matches[0][0];
+
+        if (avatarUrl) {
+            const current = cache.get(nick) || { avatarUrl: '', danceGifUrl: '' };
+            cache.set(nick, { ...current, avatarUrl });
         }
-      });
-    }
-  } catch (e) {
-    console.log("Initial load error:", e);
-  }
+    })
+    .catch(() => {});
+
+    fetch(`https://projects.cypher801.app/profile/?player=${cleanNickForCypher}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    })
+    .then(res => res.text())
+    .then(html => {
+        const match = html.match(/id="playerOutfit"\s+title="Copy outfit:\s*([^"]+)"/i) 
+                   || html.match(/data-value="([^"]+)"\s+id="playerOutfit"/i);
+        if (match && match[1]) {
+            const lookStr = encodeURIComponent(match[1].trim());
+            const danceGifUrl = `https://projects.cypher801.app/controller/render/AnimatedWebp.php/?playerLook=${lookStr}&anim=Danse`;
+            
+            const current = cache.get(nick) || { avatarUrl: '', danceGifUrl: '' };
+            cache.set(nick, { ...current, danceGifUrl });
+        }
+    })
+    .catch(() => {});
 }
 
-async function scrapeExternalData(nick) {
-  try {
-    const cleanNickForUrl = nick.replace('#', '%2523');
-    const cypherUrl = `https://projects.cypher801.app/profile/?player=${cleanNickForUrl}`;
-    const cypherRes = await fetch(cypherUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    let danceGifUrl = '';
-    
-    if (cypherRes.ok) {
-      const html = await cypherRes.text();
-      const match = html.match(/data-value="([^"]+)"\s+id="playerOutfit"/);
-      if (match && match[1]) {
-        const outfit = encodeURIComponent(match[1]);
-        danceGifUrl = `https://projects.cypher801.app/controller/render/AnimatedWebp.php/?playerLook=${outfit}&anim=Danse`;
-      }
+export function GET() {
+    try {
+        if (!fs.existsSync(filePath)) {
+            return NextResponse.json([]);
+        }
+
+        const fileContent = fs.readFileSync(filePath, 'utf-8');
+        const lines = fileContent.split('\n');
+        const list = [];
+
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+
+            const nickMatch = line.match(/^\["([^"]+)"\]/);
+            const msgMatch = line.match(/messages\s*=\s*(\d+)/);
+            const topicMatch = line.match(/topics\s*=\s*(\d+)/);
+            const timeMatch = line.match(/lastonlineostime\s*=\s*(\d+)/);
+
+            if (nickMatch) {
+                const nick = nickMatch[1];
+                const messages = msgMatch ? parseInt(msgMatch[1], 10) : 0;
+                const topics = topicMatch ? parseInt(topicMatch[1], 10) : 0;
+                const ostime = timeMatch ? parseInt(timeMatch[1], 10) : 0;
+
+                let lastSeen = 'Bilinmiyor';
+                if (ostime > 0) {
+                    const d = new Date(ostime * 1000);
+                    lastSeen = d.toLocaleString('tr-TR');
+                }
+
+                updateExtDataBackground(nick);
+
+                const ext = cache.get(nick) || { avatarUrl: '', danceGifUrl: '' };
+
+                list.push({
+                    nick,
+                    messages,
+                    topics,
+                    total: messages + topics,
+                    lastSeen,
+                    avatarUrl: ext.avatarUrl,
+                    danceGifUrl: ext.danceGifUrl
+                });
+            }
+        }
+
+        list.sort((a, b) => b.total - a.total);
+        return NextResponse.json(list);
+    } catch (err) {
+        return NextResponse.json([]);
     }
-
-    const atelierUrl = `https://atelier801.com/profile?pr=${encodeURIComponent(nick)}`;
-    const atelierRes = await fetch(atelierUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    let avatarUrl = '';
-
-    if (atelierRes.ok) {
-      const html = await atelierRes.text();
-      const regex = /http:\/\/avatars\.atelier801\.com\/[^"'\s>]+/g;
-      const matches = html.match(regex);
-      if (matches && matches.length >= 2) {
-        avatarUrl = matches[1]; 
-      }
-    }
-
-    return { avatarUrl, danceGifUrl };
-  } catch (err) {
-    console.error(`Scraping failed for ${nick}:`, err);
-    return { avatarUrl: '', danceGifUrl: '' };
-  }
-}
-
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  if (searchParams.get('clear') === 'true') {
-    global.cachedBotData = {};
-    return new NextResponse("All data has been successfully cleared!");
-  }
-
-  const now = Date.now();
-  const entries = Object.entries(global.cachedBotData);
-
-  for (const [nick, info] of entries) {
-    const lastScraped = global.lastScrapedTime[nick] || 0;
-    if (now - lastScraped > 5 * 60 * 1000 || !info.avatarUrl) {
-      const scraped = await scrapeExternalData(nick);
-      global.cachedBotData[nick].avatarUrl = scraped.avatarUrl || info.avatarUrl;
-      global.cachedBotData[nick].danceGifUrl = scraped.danceGifUrl || info.danceGifUrl;
-      global.lastScrapedTime[nick] = now;
-    }
-  }
-
-  const data = Object.entries(global.cachedBotData).map(([nick, info]) => {
-    const date = info.osTime ? new Date(info.osTime * 1000).toLocaleString('tr-TR') : 'Unknown';
-    return {
-      nick,
-      messages: info.messages,
-      topics: info.topics,
-      total: info.messages + info.topics,
-      lastSeen: date,
-      avatarUrl: info.avatarUrl,
-      danceGifUrl: info.danceGifUrl
-    };
-  });
-
-  data.sort((a, b) => b.total - a.total);
-  return NextResponse.json(data);
 }
 
 export async function POST(request) {
-  try {
-    const body = await request.json();
-    const { nick, addMessage, addTopic, osTime } = body;
+    try {
+        const body = await request.json();
+        const { nick, addMessage, addTopic, osTime } = body;
 
-    if (!nick) return NextResponse.json({ error: 'Missing nick' }, { status: 400 });
+        if (!nick) {
+            return NextResponse.json({ error: 'Missing nick' }, { status: 400 });
+        }
 
-    if (!global.cachedBotData[nick]) {
-      global.cachedBotData[nick] = { messages: 0, topics: 0, osTime: 0, avatarUrl: '', danceGifUrl: '' };
+        let fileContent = '';
+        if (fs.existsSync(filePath)) {
+            fileContent = fs.readFileSync(filePath, 'utf-8');
+        }
+
+        const escapedNick = nick.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const pattern = new RegExp(`(?m)^\\["${escapedNick}"\\]\\s*=\\s*\\{messages\\s*=\\s*(\\d+),\\s*topics\\s*=\\s*(\\d+),\\s*lastonlineostime\\s*=\\s*(\\d+)\\}`);
+
+        let currentMessages = addMessage ? 1 : 0;
+        let currentTopics = addTopic ? 1 : 0;
+        let currentTime = osTime || Math.floor(Date.now() / 1000);
+
+        const match = fileContent.match(pattern);
+        if (match) {
+            currentMessages = parseInt(match[1], 10) + (addMessage ? 1 : 0);
+            currentTopics = parseInt(match[2], 10) + (addTopic ? 1 : 0);
+            const newEntry = `["${nick}"] = {messages = ${currentMessages}, topics = ${currentTopics}, lastonlineostime = ${currentTime}}`;
+            fileContent = fileContent.replace(pattern, newEntry);
+        } else {
+            const newEntry = `["${nick}"] = {messages = ${currentMessages}, topics = ${currentTopics}, lastonlineostime = ${currentTime}}`;
+            if (fileContent && !fileContent.endsWith('\n')) {
+                fileContent += '\n';
+            }
+            fileContent += newEntry + '\n';
+        }
+
+        fs.writeFileSync(filePath, fileContent, 'utf-8');
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
     }
-
-    if (addMessage) global.cachedBotData[nick].messages += 1;
-    if (addTopic) global.cachedBotData[nick].topics += 1;
-    if (osTime) global.cachedBotData[nick].osTime = osTime;
-
-    return NextResponse.json({ success: true, user: global.cachedBotData[nick] });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
 }
