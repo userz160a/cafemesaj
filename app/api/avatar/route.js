@@ -33,7 +33,36 @@ export async function GET(request) {
       return new Response('User or avatarUrl not found in stats', { status: 404 });
     }
 
-    return Response.redirect(user.avatarUrl, 302);
+    let correctUrl = user.avatarUrl.replace('https://', 'http://');
+    
+    if (!correctUrl.includes('_50.') && correctUrl.endsWith('.jpg')) {
+      correctUrl = correctUrl.replace('.jpg', '_50.jpg');
+    } else if (!correctUrl.includes('_50.') && correctUrl.endsWith('.png')) {
+      correctUrl = correctUrl.replace('.png', '_50.png');
+    } else if (!correctUrl.includes('_50.') && correctUrl.endsWith('.jpeg')) {
+      correctUrl = correctUrl.replace('.jpeg', '_50.jpeg');
+    }
+
+    const imgRes = await fetch(correctUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/jpeg,image/png,image/jpg,image/*'
+      }
+    });
+
+    if (!imgRes.ok) {
+      return new Response(`Proxy download failed with status: ${imgRes.status}`, { status: 502 });
+    }
+
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    const imageBlob = await imgRes.blob();
+
+    return new Response(imageBlob, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
   } catch (e) {
     return new Response(`Internal Error: ${e.message}`, { status: 500 });
   }
