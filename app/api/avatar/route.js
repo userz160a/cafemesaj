@@ -1,32 +1,35 @@
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const src = searchParams.get('src');
-
-  if (!src) return new Response('Missing src', { status: 400 });
-
+export async function GET(request, { params }) {
   try {
-    const targetUrl = decodeURIComponent(src);
+    const rawName = await params.name;
+    const userName = decodeURIComponent(rawName);
 
-    const res = await fetch(targetUrl, { 
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-      } 
+    const statsRes = await fetch('https://cafetr.vercel.app/api/stats', {
+      cache: 'no-store'
+    });
+    
+    if (!statsRes.ok) return new Response('Stats fetch failed', { status: 502 });
+    
+    const users = await statsRes.json();
+    const user = users.find(u => u.nick.toLowerCase() === userName.toLowerCase());
+
+    if (!user || !user.avatarUrl) return new Response('User or avatar not found', { status: 404 });
+
+    const imgRes = await fetch(user.avatarUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
 
-    if (!res.ok) return new Response('Failed to fetch image', { status: 502 });
+    if (!imgRes.ok) return new Response('Avatar download failed', { status: 502 });
 
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer); 
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    const imageBlob = await imgRes.blob();
 
-    return new Response(buffer, {
+    return new Response(imageBlob, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400',
-        'Content-Length': buffer.length.toString()
       },
     });
   } catch (e) {
-    return new Response('Error', { status: 500 });
+    return new Response('Internal Error', { status: 500 });
   }
 }

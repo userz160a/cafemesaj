@@ -151,10 +151,13 @@ export default function Home() {
                       <td className="p-4">
                         {item.avatarUrl ? (
                           <img
-                            src={`/api/avatar?src=${encodeURIComponent(item.avatarUrl)}`}
-                            alt=""
+                            src={`/api/avatar/${encodeURIComponent(item.nick)}`}
+                            alt={item.nick}
                             className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                            onError={(e) => { e.target.style.display = 'none'; }}
+                            onError={(e) => { 
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.style.display = 'none'; 
+                            }}
                           />
                         ) : (
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>M</div>
