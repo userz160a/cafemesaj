@@ -85,6 +85,12 @@ export default function Home() {
     return nick.substring(0, 3).toUpperCase();
   };
 
+  const formatLastSeen = (osTime) => {
+    if (!osTime) return '-';
+    const date = new Date(osTime * 1000);
+    return date.toLocaleString('tr-TR');
+  };
+
   if (loading && data.length === 0) {
     return (
       <div className={`min-h-screen flex items-center justify-center font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`}>
@@ -201,8 +207,12 @@ export default function Home() {
                         <td className={`p-4 ${getRankColor(index)}`}>{item.nick}</td>
                         <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
                         <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
-                        <td className="p-4 font-bold">{item.total}</td>
-                        <td className={`p-4 text-right text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.lastSeen}</td>
+                        <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                          {(item.messages || 0) + (item.topics || 0)}
+                        </td>
+                        <td className={`p-4 text-right text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {formatLastSeen(item.lastonlineostime)}
+                        </td>
                       </tr>
                     );
                   })
