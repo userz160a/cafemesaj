@@ -14,7 +14,9 @@ export default function Home() {
       const res = await fetch('/api/stats');
       if (res.ok) {
         const jsonData = await res.json();
-        setData(Array.isArray(jsonData) ? jsonData : []);
+        if (Array.isArray(jsonData) && jsonData.length > 0) {
+          setData(jsonData);
+        }
       }
     } catch (error) {
       console.error("Data fetch error:", error);
