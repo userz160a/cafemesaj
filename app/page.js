@@ -34,8 +34,24 @@ export default function Home() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
+    const dataInterval = setInterval(fetchData, 60000);
+    
+    const avatarInterval = setInterval(() => {
+      setAvatarErrors(prevErrors => {
+        const updatedErrors = { ...prevErrors };
+        Object.keys(updatedErrors).forEach(nick => {
+          if (updatedErrors[nick] === true) {
+            delete updatedErrors[nick];
+          }
+        });
+        return updatedErrors;
+      });
+    }, 120000);
+
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(avatarInterval);
+    };
   }, []);
 
   const filteredData = (data || []).filter(item =>
@@ -169,7 +185,7 @@ export default function Home() {
                           {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                         </td>
                         <td className="p-4">
-                          {item.avatarUrl && !avatarErrors[item.nick] ? (
+                          {!avatarErrors[item.nick] ? (
                             <img
                               src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
                               alt={item.nick}
