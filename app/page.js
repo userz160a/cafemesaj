@@ -11,7 +11,13 @@ export default function Home() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch('/api/stats');
+      const res = await fetch('/api/stats', {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
       if (res.ok) {
         const jsonData = await res.json();
         if (Array.isArray(jsonData) && jsonData.length > 0) {
