@@ -8,6 +8,7 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [avatarErrors, setAvatarErrors] = useState({});
 
   const fetchData = async () => {
     try {
@@ -57,6 +58,10 @@ export default function Home() {
     if (index === 1) return darkMode ? 'bg-slate-500/5 hover:bg-slate-500/10' : 'bg-slate-500/5 hover:bg-slate-500/10';
     if (index === 2) return darkMode ? 'bg-amber-700/5 hover:bg-amber-700/10' : 'bg-amber-700/5 hover:bg-amber-700/10';
     return darkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-100/70';
+  };
+
+  const handleAvatarError = (nick) => {
+    setAvatarErrors(prev => ({ ...prev, [nick]: true }));
   };
 
   if (loading && data.length === 0) {
@@ -157,15 +162,12 @@ export default function Home() {
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </td>
                       <td className="p-4">
-                        {item.avatarUrl ? (
+                        {item.avatarUrl && !avatarErrors[item.nick] ? (
                           <img
                             src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
                             alt={item.nick}
                             className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                            onError={(e) => { 
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.style.display = 'none'; 
-                            }}
+                            onError={() => handleAvatarError(item.nick)}
                           />
                         ) : (
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>M</div>
