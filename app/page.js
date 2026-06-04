@@ -64,6 +64,11 @@ export default function Home() {
     setAvatarErrors(prev => ({ ...prev, [nick]: true }));
   };
 
+  const getFallbackText = (nick) => {
+    if (!nick) return '';
+    return nick.substring(0, 3).toUpperCase();
+  };
+
   if (loading && data.length === 0) {
     return (
       <div className={`min-h-screen flex items-center justify-center font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`}>
@@ -156,30 +161,35 @@ export default function Home() {
                     <td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
                   </tr>
                 ) : (
-                  filteredData.map((item, index) => (
-                    <tr key={index} className={`transition-colors ${getRowBg(index)}`}>
-                      <td className="p-4 text-center font-bold">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                      </td>
-                      <td className="p-4">
-                        {item.avatarUrl && !avatarErrors[item.nick] ? (
-                          <img
-                            src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
-                            alt={item.nick}
-                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                            onError={() => handleAvatarError(item.nick)}
-                          />
-                        ) : (
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>M</div>
-                        )}
-                      </td>
-                      <td className={`p-4 ${getRankColor(index)}`}>{item.nick}</td>
-                      <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
-                      <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
-                      <td className="p-4 font-bold">{item.total}</td>
-                      <td className={`p-4 text-right text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.lastSeen}</td>
-                    </tr>
-                  ))
+                  filteredData.map((item, index) => {
+                    if (!item || !item.nick) return null;
+                    return (
+                      <tr key={item.nick} className={`transition-colors ${getRowBg(index)}`}>
+                        <td className="p-4 text-center font-bold">
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                        </td>
+                        <td className="p-4">
+                          {item.avatarUrl && !avatarErrors[item.nick] ? (
+                            <img
+                              src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
+                              alt={item.nick}
+                              className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
+                              onError={() => handleAvatarError(item.nick)}
+                            />
+                          ) : (
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+                              {getFallbackText(item.nick)}
+                            </div>
+                          )}
+                        </td>
+                        <td className={`p-4 ${getRankColor(index)}`}>{item.nick}</td>
+                        <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
+                        <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
+                        <td className="p-4 font-bold">{item.total}</td>
+                        <td className={`p-4 text-right text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.lastSeen}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
