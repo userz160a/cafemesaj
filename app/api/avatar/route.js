@@ -1,7 +1,11 @@
-export async function GET(request, { params }) {
+export async function GET(request) {
   try {
-    const rawParams = await params;
-    const userName = decodeURIComponent(rawParams.name).trim().toLowerCase();
+    const { searchParams } = new URL(request.url);
+    const nameParam = searchParams.get('name');
+
+    if (!nameParam) return new Response('Missing name', { status: 400 });
+
+    const userName = decodeURIComponent(nameParam).trim().toLowerCase();
 
     const statsRes = await fetch('https://cafetr.vercel.app/api/stats', {
       cache: 'no-store'
@@ -13,15 +17,14 @@ export async function GET(request, { params }) {
     
     const user = users.find(u => {
       if (!u || !u.nick) return false;
-      const cleanNick = u.nick.trim().toLowerCase();
-      return cleanNick === userName || cleanNick.replace('#', '%23') === userName;
+      return u.nick.trim().toLowerCase() === userName;
     });
 
     if (!user || !user.avatarUrl) return new Response('User or avatar not found', { status: 404 });
 
     const imgRes = await fetch(user.avatarUrl, {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'image/jpeg,image/png,image/jpg,image/*'
       }
     });
