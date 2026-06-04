@@ -1,50 +1,55 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY || '';
 
-export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { nick, addMessage, addTopic, osTime, messageContent } = body
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-  if (!nick) {
-    return NextResponse.json({ error: 'nick required' }, { status: 400 })
-  }
+export async function POST(request) {
+  try {
+    const { nick, addMessage, addTopic, osTime } = await request.json();
+    
+    if (!nick) {
+      return NextResponse.json({ error: 'Missing nick' }, { status: 400 });
+    }
 
-  const { data: existing } = await supabase
-    .from('stats')         
-    .select('*')
-    .eq('nick', nick)
-    .single()
-
-  if (existing) {
-    const { error } = await supabase
-      .from('stats')
-      .update({
-        messages: existing.messages + (addMessage ? 1 : 0),
-        topics: existing.topics + (addTopic ? 1 : 0),
-        lastonlineostime: osTime,
-        last_message: messageContent,
-      })
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*')
       .eq('nick', nick)
+      .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  } else {
+    const oldMessages = existingUser ? (existingUser.messages || 0) : 0;
+    const oldTopics = existingUser ? (existingUser.topics || 0) : 0;
+
     const { error } = await supabase
-      .from('stats')
-      .insert({
-        nick,
-        messages: addMessage ? 1 : 0,
-        topics: addTopic ? 1 : 0,
-        lastonlineostime: osTime,
-        last_message: messageContent,
-      })
+      .from('users')
+      .upsert({
+        nick: nick,
+        messages: oldMessages + (addMessage === true || addMessage === 'true' ? 1 : 0),
+        topics: oldTopics + (addTopic === true || addTopic === 'true' ? 1 : 0),
+        lastonlineostime: osTime
+      }, { onConflict: 'nick' });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
+}
 
-  return NextResponse.json({ success: true })
+export async function GET() {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('messages', { ascending: false });
+
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }
