@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
+import path from 'path';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hcxwjnkywsfwviexjopt.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ZJFVMWFEHL32yXZXzqT4ZQ_3fNbZTO-';
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+function logToFile(data) {
+  try {
+    const logDir = 'C:/Yeni klasör/bot-dashboard';
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logPath = path.join(logDir, 'bot_logs.txt');
+    const timestamp = new Date().toLocaleString('tr-TR');
+    const logMessage = `[${timestamp}] ${JSON.stringify(data, null, 2)}\n----------------------------------------\n`;
+    fs.appendFileSync(logPath, logMessage, 'utf8');
+  } catch (err) {
+    console.error('Log yazma hatasi:', err);
+  }
+}
 
 export async function GET() {
   try {
@@ -32,6 +48,8 @@ export async function POST(req) {
     }
 
     const body = await req.json();
+    logToFile(body);
+
     const { type, nick, code, action, sessionToken, avatar, messageContent } = body;
 
     const cleanMessage = messageContent ? messageContent.replace(/[\r\n]+/g, ' ').trim() : '';
