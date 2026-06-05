@@ -1,35 +1,23 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
-import path from 'path';
 
-const statsFilePath = 'C:/Yeni klasör/bot-dashboard/bot.txt';
-let activeCodes = {}; 
-let activeSessions = {}; 
-
-function readStatsFile() {
-  try {
-    if (!fs.existsSync(statsFilePath)) return {};
-    const content = fs.readFileSync(statsFilePath, 'utf-8');
-    const stats = {};
-    const regex = /\["([^"]+)"\]\s*=\s*\{\s*messages\s*=\s*(\d+)\s*,\s*topics\s*=\s*(\d+)\s*,\s*lastonlineostime\s*=\s*(\d+)\s*\}/g;
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      stats[match[1]] = {
-        nick: match[1],
-        messages: parseInt(match[2]),
-        topics: parseInt(match[3]),
-        lastonlineostime: parseInt(match[4]),
-      };
-    }
-    return stats;
-  } catch (e) {
-    return {};
-  }
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET() {
-  const stats = readStatsFile();
-  return NextResponse.json(Object.values(stats));
+  try {
+    const { data, error } = await supabase
+      .from('stats')
+      .select('*')
+      .order('messages', { ascending: false });
+    
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 }
 
 export async function POST(req) {
@@ -38,66 +26,141 @@ export async function POST(req) {
     const { type, nick, code, action, sessionToken, avatar } = body;
 
     if (type === 'verification') {
-      if (activeCodes[nick] && activeCodes[nick].code === code) {
-        const now = Date.now();
-        if (now <= activeCodes[nick].expires) {
-          activeCodes[nick].verified = true;
-        }
+      const now = new Date().toISOString();
+      const { data: activeCode, error: fetchError } = await supabase
+        .from('active_codes')
+        .select('*')
+        .eq('nick', nick)
+        .eq('code', code)
+        .gt('expires_at', now)
+        .single();
+
+      if (activeCode && !fetchError) {
+        await supabase
+          .from('active_codes')
+          .update({ verified: true })
+          .eq('id', activeCode.id);
       }
       return NextResponse.json({ success: true });
     }
 
     if (action === 'login') {
-      const now = Date.now();
-      
+      const now = new Date().toISOString();
+
       if (!code) {
         const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-        activeCodes[nick] = {
-          code: generatedCode,
-          expires: now + 120000,
-          verified: false
-        };
+        const expiresAt = new Date(Date.now() + 120000).toISOString();
+
+        await supabase
+          .from('active_codes')
+          .delete()
+          .eq('nick', nick);
+
+        const { error: insertError } = await supabase
+          .from('active_codes')
+          .insert([{ nick, code: generatedCode, expires_at: expiresAt, verified: false }]);
+
+        if (insertError) throw insertError;
         return NextResponse.json({ success: true, step: 'wait', code: generatedCode });
       }
 
-      if (activeCodes[nick]) {
-        if (now > activeCodes[nick].expires) {
-          return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı.' });
-        }
-        
-        if (activeCodes[nick].verified && activeCodes[nick].code === code) {
-          const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-          activeSessions[token] = { nick: nick, expires: now + 86400000 * 7 };
-          delete activeCodes[nick];
-          return NextResponse.json({ success: true, step: 'success', token, nick });
-        }
+      const { data: activeCode, error: codeError } = await supabase
+        .from('active_codes')
+        .select('*')
+        .eq('nick', nick)
+        .eq('code', code)
+        .gt('expires_at', now)
+        .single();
+
+      if (codeError || !activeCode) {
+        return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı.' });
       }
+
+      if (activeCode.verified) {
+        const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error: sessionError } = await supabase
+          .from('sessions')
+          .insert([{ token, nick, expires_at: sessionExpires }]);
+
+        if (sessionError) throw sessionError;
+
+        await supabase
+          .from('active_codes')
+          .delete()
+          .eq('nick', nick);
+
+        return NextResponse.json({ success: true, step: 'success', token, nick });
+      }
+
       return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı.' });
     }
 
     if (body.messageContent && body.messageContent.toLowerCase().includes('çıkış yap')) {
       const senderNick = body.nick;
-      for (const token in activeSessions) {
-        if (activeSessions[token].nick === senderNick) {
-          delete activeSessions[token];
-        }
-      }
+      await supabase
+        .from('sessions')
+        .delete()
+        .eq('nick', senderNick);
     }
 
     if (action === 'updateAvatar') {
-      if (!sessionToken || !activeSessions[sessionToken]) {
+      if (!sessionToken) {
         return NextResponse.json({ success: false, message: 'Yetkisiz işlem.' });
       }
-      const userNick = activeSessions[sessionToken].nick;
+
+      const now = new Date().toISOString();
+      const { data: session, error: sessionCheckError } = await supabase
+        .from('sessions')
+        .select('nick')
+        .eq('token', sessionToken)
+        .gt('expires_at', now)
+        .single();
+
+      if (sessionCheckError || !session) {
+        return NextResponse.json({ success: false, message: 'Yetkisiz işlem.' });
+      }
+
+      const userNick = session.nick;
       const base64Data = avatar.replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64Data, 'base64');
       const avatarDir = 'C:/Yeni klasör/bot-dashboard/avatars';
+      
       if (!fs.existsSync(avatarDir)){
         fs.mkdirSync(avatarDir, { recursive: true });
       }
+      
       const safeNick = userNick.replace(/[^a-zA-Z0-9_#-]/g, '_');
       fs.writeFileSync(`${avatarDir}/${safeNick}.png`, buffer);
       return NextResponse.json({ success: true });
+    }
+
+    if (nick) {
+      const { data: existingUser } = await supabase
+        .from('stats')
+        .select('*')
+        .eq('nick', nick)
+        .single();
+
+      const osTimeNum = parseInt(body.osTime) || Math.floor(Date.now() / 1000);
+
+      if (existingUser) {
+        const newMessages = existingUser.messages + (body.addMessage ? 1 : 0);
+        const newTopics = existingUser.topics + (body.addTopic ? 1 : 0);
+
+        await supabase
+          .from('stats')
+          .update({ messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum })
+          .eq('nick', nick);
+      } else {
+        const newMessages = body.addMessage ? 1 : 0;
+        const newTopics = body.addTopic ? 1 : 0;
+
+        await supabase
+          .from('stats')
+          .insert([{ nick, messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum }]);
+      }
     }
 
     return NextResponse.json({ success: true });
