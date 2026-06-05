@@ -9,6 +9,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [avatarErrors, setAvatarErrors] = useState({});
+  const [cacheKey, setCacheKey] = useState(Date.now());
 
   const fetchData = async () => {
     try {
@@ -37,15 +38,8 @@ export default function Home() {
     const dataInterval = setInterval(fetchData, 60000);
     
     const avatarInterval = setInterval(() => {
-      setAvatarErrors(prevErrors => {
-        const updatedErrors = { ...prevErrors };
-        Object.keys(updatedErrors).forEach(nick => {
-          if (updatedErrors[nick] === true) {
-            delete updatedErrors[nick];
-          }
-        });
-        return updatedErrors;
-      });
+      setAvatarErrors({});
+      setCacheKey(Date.now());
     }, 120000);
 
     return () => {
@@ -193,7 +187,7 @@ export default function Home() {
                         <td className="p-4">
                           {!avatarErrors[item.nick] ? (
                             <img
-                              src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
+                              src={`/api/avatar?name=${encodeURIComponent(item.nick)}&v=${cacheKey}`}
                               alt={item.nick}
                               className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
                               onError={() => handleAvatarError(item.nick)}
