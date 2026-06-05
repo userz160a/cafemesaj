@@ -32,29 +32,64 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { type, nick, code, action, sessionToken, avatar } = body;
+    const { type, nick, code, action, sessionToken, avatar, messageContent } = body;
+
+    const cleanMessage = messageContent ? messageContent.replace(/[\r\n]+/g, ' ').trim() : '';
+
+    if (cleanMessage && cleanMessage.includes('!caferank login')) {
+      const match = cleanMessage.match(/!caferank\s+login\s+(\d+)/i);
+      const extractedCode = match ? match[1] : null;
+
+      if (extractedCode) {
+        const now = new Date().toISOString();
+        const senderNick = nick ? nick.split('#')[0].trim().toLowerCase() : '';
+
+        const { data: activeCodes, error: fetchError } = await supabase
+          .from('active_codes')
+          .select('*')
+          .eq('code', extractedCode)
+          .gt('expires_at', now);
+
+        if (activeCodes && !fetchError) {
+          const matchingCode = activeCodes.find(c => c.nick.trim().toLowerCase() === senderNick);
+
+          if (matchingCode) {
+            await supabase
+              .from('active_codes')
+              .update({ verified: true })
+              .eq('id', matchingCode.id);
+            
+            return NextResponse.json({ success: true, message: 'Kod başarıyla doğrulandı.' });
+          }
+        }
+      }
+    }
 
     if (type === 'verification') {
       const now = new Date().toISOString();
-      const { data: activeCode, error: fetchError } = await supabase
-        .from('active_codes')
-        .select('*')
-        .eq('nick', nick)
-        .eq('code', code)
-        .gt('expires_at', now)
-        .single();
+      const cleanNick = nick ? nick.split('#')[0].trim().toLowerCase() : '';
 
-      if (activeCode && !fetchError) {
-        await supabase
+      const { data: activeCodes, error: fetchError } = await supabase
           .from('active_codes')
-          .update({ verified: true })
-          .eq('id', activeCode.id);
+          .select('*')
+          .eq('code', code)
+          .gt('expires_at', now);
+
+      if (activeCodes && !fetchError) {
+        const matchingCode = activeCodes.find(c => c.nick.trim().toLowerCase() === cleanNick);
+        if (matchingCode) {
+          await supabase
+            .from('active_codes')
+            .update({ verified: true })
+            .eq('id', matchingCode.id);
+        }
       }
       return NextResponse.json({ success: true });
     }
 
     if (action === 'login') {
       const now = new Date().toISOString();
+      const cleanNick = nick ? nick.split('#')[0].trim() : '';
 
       if (!code) {
         const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -63,11 +98,11 @@ export async function POST(req) {
         await supabase
           .from('active_codes')
           .delete()
-          .eq('nick', nick);
+          .ilike('nick', cleanNick);
 
         const { error: insertError } = await supabase
           .from('active_codes')
-          .insert([{ nick, code: generatedCode, expires_at: expiresAt, verified: false }]);
+          .insert([{ nick: cleanNick, code: generatedCode, expires_at: expiresAt, verified: false }]);
 
         if (insertError) {
           return NextResponse.json({ success: false, message: `Veritabanı Hatası: ${insertError.message}` });
@@ -75,53 +110,58 @@ export async function POST(req) {
         return NextResponse.json({ success: true, step: 'wait', code: generatedCode });
       }
 
-      const { data: activeCode, error: codeError } = await supabase
+      const { data: activeCodes, error: codeError } = await supabase
         .from('active_codes')
         .select('*')
-        .eq('nick', nick)
         .eq('code', code)
-        .gt('expires_at', now)
-        .single();
+        .gt('expires_at', now);
 
-      if (codeError || !activeCode) {
+      if (codeError || !activeCodes) {
+        return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı ya da süresi doldu.' });
+      }
+
+      const matchingCode = activeCodes.find(c => c.nick.trim().toLowerCase() === cleanNick.toLowerCase());
+
+      if (!matchingCode) {
         return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı.' });
       }
 
-      if (activeCode.verified) {
+      if (matchingCode.verified) {
         const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
         const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: sessionError } = await supabase
           .from('sessions')
-          .insert([{ token, nick, expires_at: sessionExpires }]);
+          .insert([{ token, nick: matchingCode.nick, expires_at: sessionExpires }]);
 
         if (sessionError) throw sessionError;
 
         await supabase
           .from('active_codes')
           .delete()
-          .eq('nick', nick);
+          .ilike('nick', cleanNick);
 
-        return NextResponse.json({ success: true, step: 'success', token, nick });
+        return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
       }
 
-      return NextResponse.json({ success: false, message: 'Kullanıcı adı veya doğrulama kodu hatalı.' });
+      return NextResponse.json({ success: false, message: 'Kod cafede henüz doğrulanmadı. Lütfen bekleyin veya tekrar deneyin.' });
     }
 
     if (type === 'logoff') {
+      const cleanNick = nick ? nick.split('#')[0].trim() : '';
       await supabase
         .from('sessions')
         .delete()
-        .eq('nick', nick);
+        .ilike('nick', cleanNick);
       return NextResponse.json({ success: true });
     }
 
-    if (body.messageContent && body.messageContent.toLowerCase().includes('çıkış yap')) {
-      const senderNick = body.nick;
+    if (cleanMessage && cleanMessage.toLowerCase().includes('çıkış yap')) {
+      const senderNick = nick ? nick.split('#')[0].trim() : '';
       await supabase
         .from('sessions')
         .delete()
-        .eq('nick', senderNick);
+        .ilike('nick', senderNick);
     }
 
     if (action === 'updateAvatar') {
@@ -156,12 +196,13 @@ export async function POST(req) {
     }
 
     if (nick) {
-      const { data: existingUser } = await supabase
+      const cleanNick = nick.split('#')[0].trim();
+      
+      const { data: allStats } = await supabase
         .from('stats')
-        .select('*')
-        .eq('nick', nick)
-        .single();
-
+        .select('*');
+      
+      const existingUser = allStats ? allStats.find(s => s.nick.toLowerCase() === cleanNick.toLowerCase()) : null;
       const osTimeNum = parseInt(body.osTime) || Math.floor(Date.now() / 1000);
 
       if (existingUser) {
@@ -171,14 +212,14 @@ export async function POST(req) {
         await supabase
           .from('stats')
           .update({ messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum })
-          .eq('nick', nick);
+          .eq('id', existingUser.id);
       } else {
         const newMessages = body.addMessage ? 1 : 0;
         const newTopics = body.addTopic ? 1 : 0;
 
         await supabase
           .from('stats')
-          .insert([{ nick, messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum }]);
+          .insert([{ nick: cleanNick, messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum }]);
       }
     }
 
