@@ -79,19 +79,23 @@ export default function Home() {
     if (!loginNick.trim()) return;
     setLoginError('');
 
-    const res = await fetch('/api/stats', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'login', nick: loginNick })
-    });
-    const result = await res.json();
+    try {
+      const res = await fetch('/api/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', nick: loginNick })
+      });
+      const result = await res.json();
 
-    if (result.success && result.step === 'wait') {
-      setGeneratedCode(result.code);
-      setTimeLeft(120);
-      setLoginStep('code');
-    } else {
-      setLoginError('Sistemde bir hata oluştu.');
+      if (result.success && result.step === 'wait') {
+        setGeneratedCode(result.code);
+        setTimeLeft(120);
+        setLoginStep('code');
+      } else {
+        setLoginError(result.message || result.error || 'Sistemde bir hata oluştu.');
+      }
+    } catch (err) {
+      setLoginError('Sunucuya bağlanılamadı.');
     }
   };
 
