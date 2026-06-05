@@ -74,6 +74,37 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [timeLeft, loginStep]);
 
+  useEffect(() => {
+    let authInterval;
+    if (loginStep === 'code' && loginNick) {
+      authInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })
+          });
+          const result = await res.json();
+          if (result.success && result.step === 'success') {
+            localStorage.setItem('sessionToken', result.token);
+            localStorage.setItem('sessionNick', result.nick);
+            setSessionToken(result.token);
+            setUser(result.nick);
+            setLoginStep('username');
+            setLoginNick('');
+            setShowLoginForm(false);
+            clearInterval(authInterval);
+          }
+        } catch (err) {
+          console.error("Auto login check error:", err);
+        }
+      }, 2000);
+    }
+    return () => {
+      if (authInterval) clearInterval(authInterval);
+    };
+  }, [loginStep, loginNick, generatedCode]);
+
   const startLogin = async (e) => {
     e.preventDefault();
     if (!loginNick.trim()) return;
@@ -96,29 +127,6 @@ export default function Home() {
       }
     } catch (err) {
       setLoginError('Sunucuya bağlanılamadı.');
-    }
-  };
-
-  const completeLogin = async () => {
-    setLoginError('');
-    const res = await fetch('/api/stats', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })
-    });
-    const result = await res.json();
-
-    if (result.success && result.step === 'success') {
-      localStorage.setItem('sessionToken', result.token);
-      localStorage.setItem('sessionNick', result.nick);
-      setSessionToken(result.token);
-      setUser(result.nick);
-      setLoginStep('username');
-      setLoginNick('');
-      setShowLoginForm(false);
-    } else {
-      setLoginError(result.message || 'Kullanıcı adı veya doğrulama kodu hatalı.');
-      setLoginStep('username');
     }
   };
 
@@ -170,6 +178,22 @@ export default function Home() {
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
+  };
+
+  const formatLastOnline = (timestamp) => {
+    if (!timestamp) return '-';
+    try {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString('tr-TR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return '-';
+    }
   };
 
   const filteredData = (data || []).filter(item =>
@@ -235,10 +259,7 @@ export default function Home() {
                     </div>
                     <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
                     <div className="flex gap-2">
-                      <button onClick={completeLogin} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-xs font-semibold transition">
-                        Giriş Yap
-                      </button>
-                      <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); }} className={`px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                      <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
                         İptal
                       </button>
                     </div>
@@ -341,12 +362,13 @@ export default function Home() {
                   <th className="p-4">Konular</th>
                   <th className="p-4">Mesajlar</th>
                   <th className="p-4">Toplam</th>
+                  <th className="p-4">Son Görülme</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                 {filteredData.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
+                    <td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
                   </tr>
                 ) : (
                   filteredData.map((item, index) => {
@@ -375,6 +397,9 @@ export default function Home() {
                         <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
                         <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                           {(item.messages || 0) + (item.topics || 0)}
+                        </td>
+                        <td className={`p-4 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {formatLastOnline(item.lastonlineostime)}
                         </td>
                       </tr>
                     );
