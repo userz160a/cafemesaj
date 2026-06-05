@@ -69,7 +69,9 @@ export async function POST(req) {
           .from('active_codes')
           .insert([{ nick, code: generatedCode, expires_at: expiresAt, verified: false }]);
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          return NextResponse.json({ success: false, message: `Veritabanı Hatası: ${insertError.message}` });
+        }
         return NextResponse.json({ success: true, step: 'wait', code: generatedCode });
       }
 
