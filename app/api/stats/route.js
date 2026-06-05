@@ -6,9 +6,9 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PU
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-function extractCleanNick(nick) {
+function normalizeNick(nick) {
     if (!nick) return '';
-    return nick.split('#')[0].trim();
+    return nick.trim().toLowerCase();
 }
 
 export async function GET() {
@@ -35,10 +35,9 @@ export async function POST(req) {
         }
 
         const body = await req.json();
-
         const { type, nick, code, action, sessionToken, avatar, messageContent } = body;
         const cleanMessage = messageContent ? messageContent.replace(/[\r\n]+/g, ' ').trim() : '';
-        const cleanNick = extractCleanNick(nick);
+        const fullNick = nick ? nick.trim() : '';
 
         if (type === 'verification' || (cleanMessage && /!caferank\s+login\s+\d+/i.test(cleanMessage))) {
             let extractedCode = code;
@@ -47,7 +46,7 @@ export async function POST(req) {
                 extractedCode = match ? match[1] : null;
             }
 
-            if (!extractedCode || !cleanNick) {
+            if (!extractedCode || !fullNick) {
                 return NextResponse.json({ success: false, message: 'Kod veya nick eksik.' });
             }
 
@@ -64,7 +63,7 @@ export async function POST(req) {
             }
 
             const matchingCode = activeCodes.find(
-                c => c.nick.trim().toLowerCase() === cleanNick.toLowerCase()
+                c => normalizeNick(c.nick) === normalizeNick(fullNick)
             );
 
             if (!matchingCode) {
@@ -90,11 +89,11 @@ export async function POST(req) {
                 const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
                 const expiresAt = new Date(Date.now() + 120000).toISOString();
 
-                await supabase.from('active_codes').delete().ilike('nick', cleanNick);
+                await supabase.from('active_codes').delete().ilike('nick', fullNick);
 
                 const { error: insertError } = await supabase
                     .from('active_codes')
-                    .insert([{ nick: cleanNick, code: generatedCode, expires_at: expiresAt, verified: false }]);
+                    .insert([{ nick: fullNick, code: generatedCode, expires_at: expiresAt, verified: false }]);
 
                 if (insertError) {
                     return NextResponse.json({ success: false, message: `Veritabani Hatasi: ${insertError.message}` });
@@ -113,7 +112,7 @@ export async function POST(req) {
             }
 
             const matchingCode = activeCodes.find(
-                c => c.nick.trim().toLowerCase() === cleanNick.toLowerCase()
+                c => normalizeNick(c.nick) === normalizeNick(fullNick)
             );
 
             if (!matchingCode) {
@@ -124,7 +123,7 @@ export async function POST(req) {
                 const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
                 const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-                await supabase.from('sessions').delete().ilike('nick', cleanNick);
+                await supabase.from('sessions').delete().ilike('nick', fullNick);
 
                 const { error: sessionError } = await supabase
                     .from('sessions')
@@ -132,7 +131,7 @@ export async function POST(req) {
 
                 if (sessionError) throw sessionError;
 
-                await supabase.from('active_codes').delete().ilike('nick', cleanNick);
+                await supabase.from('active_codes').delete().ilike('nick', fullNick);
 
                 return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
             }
@@ -141,7 +140,7 @@ export async function POST(req) {
         }
 
         if (type === 'logoff' || (cleanMessage && /çıkış yap/i.test(cleanMessage))) {
-            await supabase.from('sessions').delete().ilike('nick', cleanNick);
+            await supabase.from('sessions').delete().ilike('nick', fullNick);
             return NextResponse.json({ success: true });
         }
 
@@ -160,10 +159,10 @@ export async function POST(req) {
             return NextResponse.json({ success: true });
         }
 
-        if (cleanNick) {
+        if (fullNick) {
             const { data: allStats } = await supabase.from('stats').select('*');
             const existingUser = allStats
-                ? allStats.find(s => s.nick.toLowerCase() === cleanNick.toLowerCase())
+                ? allStats.find(s => normalizeNick(s.nick) === normalizeNick(fullNick))
                 : null;
             const osTimeNum = parseInt(body.osTime) || Math.floor(Date.now() / 1000);
 
@@ -175,11 +174,14 @@ export async function POST(req) {
                     .update({ messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum })
                     .eq('id', existingUser.id);
             } else {
-                const newMessages = body.addMessage ? 1 : 0;
-                const newTopics = body.addTopic ? 1 : 0;
                 await supabase
                     .from('stats')
-                    .insert([{ nick: cleanNick, messages: newMessages, topics: newTopics, lastonlineostime: osTimeNum }]);
+                    .insert([{
+                        nick: fullNick,
+                        messages: body.addMessage ? 1 : 0,
+                        topics: body.addTopic ? 1 : 0,
+                        lastonlineostime: osTimeNum
+                    }]);
             }
         }
 
