@@ -17,6 +17,7 @@ export default function Home() {
   const [generatedCode, setGeneratedCode] = useState('');
   const [timeLeft, setTimeLeft] = useState(120);
   const [loginError, setLoginError] = useState('');
+  const [showLoginForm, setShowLoginForm] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function Home() {
       });
       if (res.ok) {
         const jsonData = await res.json();
-        if (Array.isArray(jsonData) && jsonData.length > 0) {
+        if (Array.isArray(jsonData)) {
           setData(jsonData);
         }
       }
@@ -110,6 +111,7 @@ export default function Home() {
       setUser(result.nick);
       setLoginStep('username');
       setLoginNick('');
+      setShowLoginForm(false);
     } else {
       setLoginError(result.message || 'Kullanıcı adı veya doğrulama kodu hatalı.');
       setLoginStep('username');
@@ -192,60 +194,75 @@ export default function Home() {
     <div className={`min-h-screen p-4 md:p-6 font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
         
-        <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+        <div className="flex justify-end">
           {!user ? (
-            <div>
-              <h2 className="text-xl font-bold mb-4">Giriş Yap</h2>
-              {loginError && <p className="text-red-500 text-sm mb-3 font-medium">{loginError}</p>}
-              
-              {loginStep === 'username' ? (
-                <form onSubmit={startLogin} className="flex gap-3 max-w-md">
-                  <input
-                    type="text"
-                    placeholder="Oyun kullanıcı adınız (Örn: Nick#0000)"
-                    value={loginNick}
-                    onChange={(e) => setLoginNick(e.target.value)}
-                    className={`flex-1 p-2 rounded-lg border text-sm outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                  />
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                    Kod Üret
-                  </button>
-                </form>
-              ) : (
-                <div className="space-y-3 max-w-md">
-                  <p className="text-sm font-medium">Caferank#3180'e transformiceden alttaki kodu gönderiniz.</p>
-                  <div className="bg-slate-200 dark:bg-slate-700 p-4 rounded-lg text-center text-2xl font-black tracking-widest text-blue-600 dark:text-blue-400">
-                    {generatedCode}
+            !showLoginForm ? (
+              <button 
+                onClick={() => setShowLoginForm(true)} 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+              >
+                Giriş Yap
+              </button>
+            ) : (
+              <div className={`p-4 rounded-xl border w-full max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+                {loginError && <p className="text-red-500 text-sm mb-3 font-medium">{loginError}</p>}
+                
+                {loginStep === 'username' ? (
+                  <form onSubmit={startLogin} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Kullanıcı adı (Nick#0000)"
+                      value={loginNick}
+                      onChange={(e) => setLoginNick(e.target.value)}
+                      className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                    />
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
+                      Kod Üret
+                    </button>
+                    <button type="button" onClick={() => setShowLoginForm(false)} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                      İptal
+                    </button>
+                  </form>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium">Caferank#3180'e transformiceden alttaki kodu gönderiniz.</p>
+                    <div className="bg-slate-200 dark:bg-slate-700 p-3 rounded-lg text-center text-xl font-black tracking-widest text-blue-600 dark:text-blue-400">
+                      {generatedCode}
+                    </div>
+                    <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
+                    <div className="flex gap-2">
+                      <button onClick={completeLogin} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-xs font-semibold transition">
+                        Giriş Yap
+                      </button>
+                      <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); }} className={`px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                        İptal
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Doğrulama kodunun alınması süre alabilir</p>
-                  <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
-                  <button onClick={completeLogin} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-semibold transition">
-                    Giriş Yap
-                  </button>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )
           ) : (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className={`p-4 rounded-xl border w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
               <div className="flex items-center gap-4">
                 <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
                   <img
                     src={`/api/avatar?name=${encodeURIComponent(user)}&v=${cacheKey}`}
                     alt={user}
-                    className="w-16 h-16 rounded-xl object-cover bg-slate-700/20 border-2 border-blue-500"
+                    className="w-12 h-12 rounded-xl object-cover bg-slate-700/20 border-2 border-blue-500"
                     onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='%23334155'/></svg>"; }}
                   />
                   <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200">
-                    <Upload size={18} className="text-white" />
+                    <Upload size={14} className="text-white" />
                   </div>
                   <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">{user}</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Fotoğrafınızı değiştirmek için üzerine tıklayın (Max 512x512 ölçeklenir)</p>
+                  <h2 className="text-sm font-bold">{user}</h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Görseli değiştirmek için tıklayın</p>
                 </div>
               </div>
-              <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition self-start sm:self-center">
+              <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition self-start sm:self-center">
                 Oturumu Kapat
               </button>
             </div>
