@@ -1,7 +1,6 @@
 'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
@@ -18,7 +17,9 @@ export default function Home() {
     const [timeLeft, setTimeLeft] = useState(120);
     const [loginError, setLoginError] = useState('');
     const [showLoginForm, setShowLoginForm] = useState(false);
+    const [showAvatarMenu, setShowAvatarMenu] = useState(false);
     const fileInputRef = useRef(null);
+    const menuRef = useRef(null);
 
     useEffect(() => {
         const savedToken = localStorage.getItem('sessionToken');
@@ -29,6 +30,16 @@ export default function Home() {
         }
     }, []);
 
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                setShowAvatarMenu(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const fetchData = async () => {
         try {
             const res = await fetch('/api/stats', {
@@ -37,9 +48,7 @@ export default function Home() {
             });
             if (res.ok) {
                 const jsonData = await res.json();
-                if (Array.isArray(jsonData)) {
-                    setData(jsonData);
-                }
+                if (Array.isArray(jsonData)) setData(jsonData);
             }
         } catch (error) {
             console.error('Data fetch error:', error);
@@ -76,29 +85,7 @@ export default function Home() {
     useEffect(() => {
         let authInterval;
         if (loginStep === 'code' && loginNick && generatedCode) {
-            authInterval = setInterval(async () => {
-                try {
-                    const res = await fetch('/api/stats', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })
-                    });
-                    const result = await res.json();
-                    if (result.success && result.step === 'success') {
-                        localStorage.setItem('sessionToken', result.token);
-                        localStorage.setItem('sessionNick', result.nick);
-                        setSessionToken(result.token);
-                        setUser(result.nick);
-                        setLoginStep('username');
-                        setLoginNick('');
-                        setGeneratedCode('');
-                        setShowLoginForm(false);
-                        clearInterval(authInterval);
-                    }
-                } catch (err) {
-                    console.error('Auto login check error:', err);
-                }
-            }, 2000);
+            authInterval = setInterval(async () => {                try {                    const res = await fetch('/api/stats', {                        method: 'POST',                        headers: { 'Content-Type': 'application/json' },                        body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })                    });                    const result = await res.json();                    if (result.success && result.step === 'success') {                        localStorage.setItem('sessionToken', result.token);                        localStorage.setItem('sessionNick', result.nick);                        setSessionToken(result.token);                        setUser(result.nick);                        setLoginStep('username');                        setLoginNick('');                        setGeneratedCode('');                        setShowLoginForm(false);                        clearInterval(authInterval);                    }                } catch (err) {                    console.error('Auto login check error:', err);                }            }, 2000);
         }
         return () => { if (authInterval) clearInterval(authInterval); };
     }, [loginStep, loginNick, generatedCode]);
@@ -110,37 +97,13 @@ export default function Home() {
         try {
             const res = await fetch('/api/stats', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'login', nick: loginNick.trim() })
-            });
-            const result = await res.json();
-            if (result.success && result.step === 'wait') {
-                setGeneratedCode(result.code);
-                setTimeLeft(120);
-                setLoginStep('code');
-            } else {
-                setLoginError(result.message || result.error || 'Sistemde bir hata olustu.');
-            }
-        } catch (err) {
-            setLoginError('Sunucuya baglanılamadı.');
-        }
-    };
+                headers: { 'Content-Type': 'application/json' },                body: JSON.stringify({ action: 'login', nick: loginNick.trim() })            });            const result = await res.json();            if (result.success && result.step === 'wait') {                setGeneratedCode(result.code);                setTimeLeft(120);                setLoginStep('code');            } else {                setLoginError(result.message || result.error || 'Sistemde bir hata olustu.');            }        } catch (err) {            setLoginError('Sunucuya baglanılamadı.');        }    };
 
     const handleLogout = async () => {
         try {
             await fetch('/api/stats', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'logoff', nick: user })
-            });
-        } catch (err) {
-            console.error('Logout error:', err);
-        }
-        localStorage.removeItem('sessionToken');
-        localStorage.removeItem('sessionNick');
-        setSessionToken(null);
-        setUser(null);
-    };
+                headers: { 'Content-Type': 'application/json' },                body: JSON.stringify({ type: 'logoff', nick: user })            });        } catch (err) {            console.error('Logout error:', err);        }        localStorage.removeItem('sessionToken');        localStorage.removeItem('sessionNick');        setSessionToken(null);        setUser(null);        setShowAvatarMenu(false);    };
 
     const handleAvatarUpload = (e) => {
         const file = e.target.files[0];
@@ -158,22 +121,10 @@ export default function Home() {
                 canvas.height = size > maxSize ? maxSize : size;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, canvas.width, canvas.height);
-                const base64Image = canvas.toDataURL('image/png');
-                try {
-                    const res = await fetch('/api/stats', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'updateAvatar', sessionToken, avatar: base64Image })
-                    });
-                    const result = await res.json();
-                    if (result.success) setCacheKey(Date.now());
-                } catch (err) {
-                    console.error('Avatar upload error:', err);
-                }
-            };
-            img.src = event.target.result;
+                const base64Image = canvas.toDataURL('image/png');                try {                    const res = await fetch('/api/stats', {                        method: 'POST',                        headers: { 'Content-Type': 'application/json' },                        body: JSON.stringify({ action: 'updateAvatar', sessionToken, avatar: base64Image })                    });                    const result = await res.json();                    if (result.success) setCacheKey(Date.now());                } catch (err) {                    console.error('Avatar upload error:', err);                }            };            img.src = event.target.result;
         };
         reader.readAsDataURL(file);
+        setShowAvatarMenu(false);
     };
 
     const formatLastOnline = (timestamp) => {
@@ -183,9 +134,7 @@ export default function Home() {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit'
             });
-        } catch (e) {
-            return '-';
-        }
+        } catch (e) { return '-'; }
     };
 
     const filteredData = (data || []).filter(item =>
@@ -213,82 +162,11 @@ export default function Home() {
     return (
         <div className={`min-h-screen p-4 md:p-6 font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
             <div className="max-w-6xl mx-auto space-y-6">
-
-                <div className="flex justify-end">
-                    {!user ? (
-                        !showLoginForm ? (
-                            <button
-                                onClick={() => setShowLoginForm(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                            >
-                                Giriş Yap
-                            </button>
-                        ) : (
-                            <div className={`p-4 rounded-xl border w-full max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
-                                {loginError && <p className="text-red-500 text-sm mb-3 font-medium">{loginError}</p>}
-                                {loginStep === 'username' ? (
-                                    <form onSubmit={startLogin} className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Kullanıcı adı (Nick#0000)"
-                                            value={loginNick}
-                                            onChange={(e) => setLoginNick(e.target.value)}
-                                            className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                                        />
-                                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
-                                            Kod Üret
-                                        </button>
-                                        <button type="button" onClick={() => setShowLoginForm(false)} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                            İptal
-                                        </button>
-                                    </form>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <p className="text-xs font-medium">Cafedeki herhangi bir konuya şunu yazınız:</p>
-                                        <p className="text-xs font-mono font-bold text-blue-600">!caferank login {generatedCode}</p>
-                                        <div className={`p-3 rounded-lg text-center text-xl font-black tracking-widest text-blue-600 ${darkMode ? 'bg-slate-700 dark:text-blue-400' : 'bg-slate-200'}`}>
-                                            {generatedCode}
-                                        </div>
-                                        <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
-                                        <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                            İptal
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )
-                    ) : (
-                        <div className={`p-4 rounded-xl border w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="flex items-center gap-4">
-                                <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
-                                    <img
-                                        src={`/api/avatar?name=${encodeURIComponent(user)}&v=${cacheKey}`}
-                                        alt={user}
-                                        className="w-12 h-12 rounded-xl object-cover bg-slate-700/20 border-2 border-blue-500"
-                                        onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='%23334155'/></svg>"; }}
-                                    />
-                                    <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200">
-                                        <Upload size={14} className="text-white" />
-                                    </div>
-                                    <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
-                                </div>
-                                <div>
-                                    <h2 className="text-sm font-bold">{user}</h2>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Görseli değiştirmek için tıklayın</p>
-                                </div>
-                            </div>
-                            <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition self-start sm:self-center">
-                                Oturumu Kapat
-                            </button>
-                        </div>
-                    )}
-                </div>
-
                 <div className={`flex items-center justify-between border-b pb-4 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                     <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
                         Cafe Rank
                     </h1>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => setDarkMode(!darkMode)}
                             className="relative w-16 h-8 flex items-center bg-amber-500 rounded-full p-1 cursor-pointer transition-colors duration-300 outline-none border-none"
@@ -303,8 +181,88 @@ export default function Home() {
                         >
                             <RefreshCw size={16} />
                         </button>
+                        {!user ? (
+                            !showLoginForm ? (
+                                <button
+                                    onClick={() => setShowLoginForm(true)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+                                >
+                                    Giriş Yap
+                                </button>
+                            ) : null
+                        ) : (
+                            <div className="relative" ref={menuRef}>
+                                <button
+                                    onClick={() => setShowAvatarMenu(!showAvatarMenu)}
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-300 hover:bg-slate-100'}`}
+                                >
+                                    <img
+                                        src={`/api/avatar?name=${encodeURIComponent(user)}&v=${cacheKey}`}
+                                        alt={user}
+                                        className="w-6 h-6 rounded-md object-cover"
+                                        onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }}
+                                    />
+                                    <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
+                                    <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
+                                </button>
+                                {showAvatarMenu && (
+                                    <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-50 overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                        <button
+                                            onClick={() => fileInputRef.current.click()}
+                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}
+                                        >
+                                            <Upload size={14} />
+                                            Avatar Değiştir
+                                        </button>
+                                        <div className={`border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`} />
+                                        <button
+                                            onClick={handleLogout}
+                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-500 ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-red-50'}`}
+                                        >
+                                            <LogOut size={14} />
+                                            Oturumu Kapat
+                                        </button>
+                                    </div>
+                                )}
+                                <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {showLoginForm && !user && (
+                    <div className={`p-4 rounded-xl border max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+                        {loginError && <p className="text-red-500 text-sm mb-3 font-medium">{loginError}</p>}
+                        {loginStep === 'username' ? (
+                            <form onSubmit={startLogin} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Nick#0000"
+                                    value={loginNick}
+                                    onChange={(e) => setLoginNick(e.target.value)}
+                                    className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                                />
+                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
+                                    Kod Üret
+                                </button>
+                                <button type="button" onClick={() => setShowLoginForm(false)} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                    İptal
+                                </button>
+                            </form>
+                        ) : (
+                            <div className="space-y-3">
+                                <p className="text-xs font-medium">Cafedeki herhangi bir konuya şunu yazın:</p>
+                                <div className={`p-3 rounded-lg text-center text-xl font-black tracking-widest text-blue-600 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                    !caferank login {generatedCode}
+                                </div>
+                                <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
+                                <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                    İptal
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-3 max-w-2xl">
                     <div className={`p-3 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -318,8 +276,7 @@ export default function Home() {
                         <FileText size={16} className="text-cyan-500" />
                         <div className="text-xs">
                             <p className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Konular</p>
-                            <p className="font-bold text-sm">{totalTopics}</p>
-                        </div>
+                            <p className="font-bold text-sm">{totalTopics}</p>                        </div>
                     </div>
                     <div className={`p-3 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-sm'}`}>
                         <Users size={16} className="text-emerald-500" />
@@ -341,7 +298,6 @@ export default function Home() {
                             className={`bg-transparent border-none outline-none text-sm w-full ${darkMode ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'}`}
                         />
                     </div>
-
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-sm">
                             <thead>
@@ -357,13 +313,9 @@ export default function Home() {
                             </thead>
                             <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                                 {loading ? (
-                                    <tr>
-                                        <td colSpan={7} className="p-8 text-center text-slate-400">Yükleniyor...</td>
-                                    </tr>
+                                    <tr><td colSpan={7} className="p-8 text-center text-slate-400">Yükleniyor...</td></tr>
                                 ) : filteredData.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td>
-                                    </tr>
+                                    <tr><td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td></tr>
                                 ) : (
                                     filteredData.map((item, index) => {
                                         if (!item || !item.nick) return null;
@@ -403,7 +355,6 @@ export default function Home() {
                         </table>
                     </div>
                 </div>
-
             </div>
         </div>
     );
