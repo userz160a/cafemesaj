@@ -12,9 +12,7 @@ function normalizeNick(nick) {
 
 function getClientIp(req) {
     let ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
-    if (ip && ip.includes(',')) {
-        ip = ip.split(',')[0].trim();
-    }
+    if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
     return ip || '127.0.0.1';
 }
 
@@ -24,6 +22,9 @@ export async function GET(req) {
 
         const url = new URL(req.url);
         const action = url.searchParams.get('action');
+        const page = parseInt(url.searchParams.get('page') || '1');
+        const limit = 40;
+        const offset = (page - 1) * limit;
 
         if (action === 'checkIp') {
             const ip = getClientIp(req);
@@ -36,12 +37,10 @@ export async function GET(req) {
                 const matchedNick = ipData[0].nick;
                 const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
                 const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
                 await supabase.from('sessions').delete().ilike('nick', matchedNick);
                 const { error: sessionError } = await supabase
                     .from('sessions')
                     .insert([{ token, nick: matchedNick, expires_at: sessionExpires }]);
-
                 if (!sessionError) {
                     return NextResponse.json({ success: true, autoLogin: true, token, nick: matchedNick });
                 }
@@ -49,9 +48,14 @@ export async function GET(req) {
             return NextResponse.json({ success: false, autoLogin: false });
         }
 
-        const { data, error } = await supabase.from('stats').select('*').order('messages', { ascending: false });
+        const { data, error, count } = await supabase
+            .from('stats')
+            .select('*', { count: 'exact' })
+            .order('messages', { ascending: false })
+            .range(offset, offset + limit - 1);
+
         if (error) throw error;
-        return NextResponse.json(data);
+        return NextResponse.json({ data, total: count, page, limit });
     } catch (error) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
@@ -75,9 +79,7 @@ export async function POST(req) {
             if (!extractedCode || !fullNick) return NextResponse.json({ success: false, message: 'Kod veya nick eksik.' });
 
             const { data: activeCodes, error: fetchError } = await supabase
-                .from('active_codes')
-                .select('*')
-                .eq('code', extractedCode);
+                .from('active_codes').select('*').eq('code', extractedCode);
 
             if (fetchError || !activeCodes || activeCodes.length === 0)
                 return NextResponse.json({ success: false, message: 'Kod bulunamadi veya suresi doldu.' });
@@ -107,10 +109,7 @@ export async function POST(req) {
             }
 
             const { data: activeCodes, error: codeError } = await supabase
-                .from('active_codes')
-                .select('*')
-                .eq('code', code)
-                .eq('verified', true);
+                .from('active_codes').select('*').eq('code', code).eq('verified', true);
 
             if (codeError || !activeCodes || activeCodes.length === 0)
                 return NextResponse.json({ success: false, message: 'Kod dogrulanmadi, lutfen cafede komutu yazin.' });
@@ -127,11 +126,7 @@ export async function POST(req) {
             if (sessionError) throw sessionError;
 
             const { data: existingIp } = await supabase
-                .from('user_ips')
-                .select('*')
-                .ilike('nick', matchingCode.nick)
-                .eq('ip_address', currentIp);
-
+                .from('user_ips').select('*').ilike('nick', matchingCode.nick).eq('ip_address', currentIp);
             if (!existingIp || existingIp.length === 0) {
                 await supabase.from('user_ips').insert([{ nick: matchingCode.nick, ip_address: currentIp }]);
             }
@@ -140,12 +135,19 @@ export async function POST(req) {
             return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
         }
 
-        if (action === 'updateAvatar') {
-            if (!sessionToken) return NextResponse.json({ success: false, message: 'Yetkisiz islem.' });
+        if (action === 'saveNote') {
+            if (!sessionToken) return NextResponse.json({ success: false, message: 'Yetkisiz.' });
             const now = new Date().toISOString();
-            const { data: session, error: sessionCheckError } = await supabase
+            const { data: session, error: sessionError } = await supabase
                 .from('sessions').select('nick').eq('token', sessionToken).gt('expires_at', now).single();
-            if (sessionCheckError || !session) return NextResponse.json({ success: false, message: 'Yetkisiz islem.' });
+            if (sessionError || !session) return NextResponse.json({ success: false, message: 'Gecersiz oturum.' });
+
+            const note = (body.note || '').substring(0, 100);
+            const { data: allStats } = await supabase.from('stats').select('*');
+            const existingUser = allStats ? allStats.find(s => normalizeNick(s.nick) === normalizeNick(session.nick)) : null;
+            if (existingUser) {
+                await supabase.from('stats').update({ note }).eq('id', existingUser.id);
+            }
             return NextResponse.json({ success: true });
         }
 
