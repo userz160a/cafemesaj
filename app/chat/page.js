@@ -140,7 +140,7 @@ export default function Chat() {
                         <div className="flex-1 h-px bg-slate-200" />
                     </div>
                     <div className="space-y-2">
-                        <p className="text-xs text-slate-500">Ziyaretçi olarak katıl (3-10 karakter, ilk harf büyük, sadece A-Z ve 0-9)</p>
+                        <p className="text-xs text-slate-500">Ziyaretçi olarak katıl</p>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">*</span>
                             <input
