@@ -61,15 +61,10 @@ export async function POST(req) {
     try {
         if (!supabase) return NextResponse.json({ success: false, error: 'Supabase baglantisi kurulamadi.' }, { status: 500 });
         const body = await req.json();
-        const { type, nick, code, action, sessionToken, avatar, messageContent } = body;
+        const { type, nick, code, action, sessionToken, messageContent } = body;
         const cleanMessage = messageContent ? messageContent.replace(/[\r\n]+/g, ' ').trim() : '';
         const fullNick = nick ? nick.trim() : '';
         const currentIp = getClientIp(req);
-
-        await supabase
-            .from('active_codes')
-            .delete()
-            .lt('expires_at', new Date().toISOString());
 
         if (type === 'verification' || (cleanMessage && /!caferank\s+login\s+\d+/i.test(cleanMessage))) {
             let extractedCode = code;
