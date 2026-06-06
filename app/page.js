@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown, MessageCircle } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
@@ -22,12 +22,35 @@ export default function Home() {
     const menuRef = useRef(null);
 
     useEffect(() => {
-        const savedToken = localStorage.getItem('sessionToken');
-        const savedNick = localStorage.getItem('sessionNick');
-        if (savedToken && savedNick) {
-            setSessionToken(savedToken);
-            setUser(savedNick);
-        }
+        const checkIpLogin = async () => {
+            try {
+                const res = await fetch('/api/stats?action=checkIp');
+                const result = await res.json();
+                if (result.success && result.autoLogin) {
+                    localStorage.setItem('sessionToken', result.token);
+                    localStorage.setItem('sessionNick', result.nick);
+                    setSessionToken(result.token);
+                    setUser(result.nick);
+                    return true;
+                }
+            } catch (err) {
+                console.error('IP login check error:', err);
+            }
+            return false;
+        };
+
+        const initAuth = async () => {
+            const savedToken = localStorage.getItem('sessionToken');
+            const savedNick = localStorage.getItem('sessionNick');
+            if (savedToken && savedNick) {
+                setSessionToken(savedToken);
+                setUser(savedNick);
+            } else {
+                await checkIpLogin();
+            }
+        };
+
+        initAuth();
     }, []);
 
     useEffect(() => {
@@ -53,7 +76,7 @@ export default function Home() {
         } catch (error) {
             console.error('Data fetch error:', error);
         } finally {
-            setLoading(false);
+            loading && setLoading(false);
         }
     };
 
@@ -85,7 +108,29 @@ export default function Home() {
     useEffect(() => {
         let authInterval;
         if (loginStep === 'code' && loginNick && generatedCode) {
-            authInterval = setInterval(async () => {                try {                    const res = await fetch('/api/stats', {                        method: 'POST',                        headers: { 'Content-Type': 'application/json' },                        body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })                    });                    const result = await res.json();                    if (result.success && result.step === 'success') {                        localStorage.setItem('sessionToken', result.token);                        localStorage.setItem('sessionNick', result.nick);                        setSessionToken(result.token);                        setUser(result.nick);                        setLoginStep('username');                        setLoginNick('');                        setGeneratedCode('');                        setShowLoginForm(false);                        clearInterval(authInterval);                    }                } catch (err) {                    console.error('Auto login check error:', err);                }            }, 2000);
+            authInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/stats', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })
+                    });
+                    const result = await res.json();
+                    if (result.success && result.step === 'success') {
+                        localStorage.setItem('sessionToken', result.token);
+                        localStorage.setItem('sessionNick', result.nick);
+                        setSessionToken(result.token);
+                        setUser(result.nick);
+                        setLoginStep('username');
+                        setLoginNick('');
+                        setGeneratedCode('');
+                        setShowLoginForm(false);
+                        clearInterval(authInterval);
+                    }
+                } catch (err) {
+                    console.error('Auto login check error:', err);
+                }
+            }, 2000);
         }
         return () => { if (authInterval) clearInterval(authInterval); };
     }, [loginStep, loginNick, generatedCode]);
@@ -97,31 +142,89 @@ export default function Home() {
         try {
             const res = await fetch('/api/stats', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },                body: JSON.stringify({ action: 'login', nick: loginNick.trim() })            });            const result = await res.json();            if (result.success && result.step === 'wait') {                setGeneratedCode(result.code);                setTimeLeft(120);                setLoginStep('code');            } else {                setLoginError(result.message || result.error || 'Sistemde bir hata olustu.');            }        } catch (err) {            setLoginError('Sunucuya baglanılamadı.');        }    };
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'login', nick: loginNick.trim() })
+            });
+            const result = await res.json();
+            if (result.success && result.step === 'wait') {
+                setGeneratedCode(result.code);
+                setTimeLeft(120);
+                setLoginStep('code');
+            } else {
+                setLoginError(result.message || result.error || 'Sistemde bir hata olustu.');
+            }
+        } catch (err) {
+            setLoginError('Sunucuya baglanılamadı.');
+        }
+    };
 
     const handleLogout = async () => {
         try {
             await fetch('/api/stats', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },                body: JSON.stringify({ type: 'logoff', nick: user })            });        } catch (err) {            console.error('Logout error:', err);        }        localStorage.removeItem('sessionToken');        localStorage.removeItem('sessionNick');        setSessionToken(null);        setUser(null);        setShowAvatarMenu(false);    };
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'logoff', nick: user })
+            });
+        } catch (err) {
+            console.error('Logout error:', err);
+        }
+        localStorage.removeItem('sessionToken');
+        localStorage.removeItem('sessionNick');
+        setSessionToken(null);
+        setUser(null);
+        setShowAvatarMenu(false);
+    };
 
     const handleAvatarUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Lütfen sadece PNG, JPG, JPEG veya GIF formatında bir dosya seçin.');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
             img.onload = async () => {
+                if (img.width > 1024 || img.height > 1024) {
+                    alert('Görsel boyutları maksimum 1024x1024 piksel olmalıdır.');
+                    return;
+                }
+
                 const canvas = document.createElement('canvas');
-                const maxSize = 512;
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
                 const size = Math.min(img.width, img.height);
                 const xOffset = (img.width - size) / 2;
                 const yOffset = (img.height - size) / 2;
-                canvas.width = size > maxSize ? maxSize : size;
-                canvas.height = size > maxSize ? maxSize : size;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, canvas.width, canvas.height);
-                const base64Image = canvas.toDataURL('image/png');                try {                    const res = await fetch('/api/stats', {                        method: 'POST',                        headers: { 'Content-Type': 'application/json' },                        body: JSON.stringify({ action: 'updateAvatar', sessionToken, avatar: base64Image })                    });                    const result = await res.json();                    if (result.success) setCacheKey(Date.now());                } catch (err) {                    console.error('Avatar upload error:', err);                }            };            img.src = event.target.result;
+                
+                ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, 512, 512);
+                const base64Image = canvas.toDataURL('image/png');
+
+                try {
+                    const res = await fetch('/api/avatar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionToken, avatar: base64Image })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        setCacheKey(Date.now());
+                        alert('Avatar başarıyla güncellendi.');
+                    } else {
+                        alert(result.message || 'Avatar yüklenemedi.');
+                    }
+                } catch (err) {
+                    console.error('Avatar upload error:', err);
+                    alert('Sunucu hatası oluştu.');
+                }
+            };
+            img.src = event.target.result;
         };
         reader.readAsDataURL(file);
         setShowAvatarMenu(false);
@@ -186,11 +289,8 @@ export default function Home() {
                                 <button
                                     onClick={() => setShowLoginForm(true)}
                                     className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                                >
-                                    Giriş Yap
-                                </button>
-                            ) : null
-                        ) : (
+                                ) : null
+                            ) : (
                             <div className="relative" ref={menuRef}>
                                 <button
                                     onClick={() => setShowAvatarMenu(!showAvatarMenu)}
@@ -214,17 +314,24 @@ export default function Home() {
                                             <Upload size={14} />
                                             Avatar Değiştir
                                         </button>
+                                        <button
+                                            onClick={() => window.open('/chat', '_blank')}
+                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}
+                                        >
+                                            <MessageCircle size={14} />
+                                            Sohbeti aç
+                                        </button>
                                         <div className={`border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`} />
                                         <button
                                             onClick={handleLogout}
                                             className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-500 ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-red-50'}`}
                                         >
                                             <LogOut size={14} />
-                                            Oturumu Kapat
+                                            Çıkış Yap
                                         </button>
                                     </div>
                                 )}
-                                <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
+                                <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept=".png,.jpg,.jpeg,.gif" className="hidden" />
                             </div>
                         )}
                     </div>
@@ -276,7 +383,8 @@ export default function Home() {
                         <FileText size={16} className="text-cyan-500" />
                         <div className="text-xs">
                             <p className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Konular</p>
-                            <p className="font-bold text-sm">{totalTopics}</p>                        </div>
+                            <p className="font-bold text-sm">{totalTopics}</p>
+                        </div>
                     </div>
                     <div className={`p-3 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-sm'}`}>
                         <Users size={16} className="text-emerald-500" />
