@@ -1,14 +1,14 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown, MessageCircle, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
     const [avatarErrors, setAvatarErrors] = useState({});
-    const [cacheKey, setCacheKey] = useState(Date.now());
     const [user, setUser] = useState(null);
     const [sessionToken, setSessionToken] = useState(null);
     const [loginNick, setLoginNick] = useState('');
@@ -18,8 +18,15 @@ export default function Home() {
     const [loginError, setLoginError] = useState('');
     const [showLoginForm, setShowLoginForm] = useState(false);
     const [showAvatarMenu, setShowAvatarMenu] = useState(false);
-    const fileInputRef = useRef(null);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [total, setTotal] = useState(0);
+    const [editingNote, setEditingNote] = useState(false);
+    const [noteInput, setNoteInput] = useState('');
+    const [noteSaving, setNoteSaving] = useState(false);
     const menuRef = useRef(null);
+    const observerRef = useRef(null);
+    const bottomTriggerRef = useRef(null);
 
     useEffect(() => {
         const checkIpLogin = async () => {
@@ -33,9 +40,7 @@ export default function Home() {
                     setUser(result.nick);
                     return true;
                 }
-            } catch (err) {
-                console.error('IP login check error:', err);
-            }
+            } catch (err) { console.error(err); }
             return false;
         };
 
@@ -49,56 +54,64 @@ export default function Home() {
                 await checkIpLogin();
             }
         };
-
         initAuth();
     }, []);
 
     useEffect(() => {
         function handleClickOutside(e) {
-            if (menuRef.current && !menuRef.current.contains(e.target)) {
-                setShowAvatarMenu(false);
-            }
+            if (menuRef.current && !menuRef.current.contains(e.target)) setShowAvatarMenu(false);
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchData = async () => {
+    const fetchData = async (pageNum = 1, append = false) => {
         try {
-            const res = await fetch('/api/stats', {
+            if (pageNum === 1) setLoading(true);
+            else setLoadingMore(true);
+
+            const res = await fetch(`/api/stats?page=${pageNum}`, {
                 cache: 'no-store',
                 headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
             });
             if (res.ok) {
-                const jsonData = await res.json();
-                if (Array.isArray(jsonData)) setData(jsonData);
+                const json = await res.json();
+                if (json.data) {
+                    setData(prev => append ? [...prev, ...json.data] : json.data);
+                    setTotal(json.total || 0);
+                    setHasMore((pageNum * 40) < (json.total || 0));
+                }
             }
         } catch (error) {
             console.error('Data fetch error:', error);
         } finally {
-            loading && setLoading(false);
+            setLoading(false);
+            setLoadingMore(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
-        const dataInterval = setInterval(fetchData, 60000);
-        const avatarInterval = setInterval(() => {
-            setAvatarErrors({});
-            setCacheKey(Date.now());
-        }, 120000);
-        return () => {
-            clearInterval(dataInterval);
-            clearInterval(avatarInterval);
-        };
+        fetchData(1, false);
+        const interval = setInterval(() => fetchData(1, false), 60000);
+        return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        if (loginStep !== 'code' || timeLeft <= 0) {
-            if (timeLeft === 0) {
-                setLoginError('Süre doldu. Lütfen tekrar deneyin.');
-                setLoginStep('username');
+        if (!bottomTriggerRef.current) return;
+        observerRef.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage, true);
             }
+        }, { threshold: 0.1 });
+        observerRef.current.observe(bottomTriggerRef.current);
+        return () => observerRef.current?.disconnect();
+    }, [hasMore, loadingMore, loading, page]);
+
+    useEffect(() => {
+        if (loginStep !== 'code' || timeLeft <= 0) {
+            if (timeLeft === 0) { setLoginError('Süre doldu. Lütfen tekrar deneyin.'); setLoginStep('username'); }
             return;
         }
         const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
@@ -128,9 +141,7 @@ export default function Home() {
                         setShowLoginForm(false);
                         clearInterval(authInterval);
                     }
-                } catch (err) {
-                    console.error('Auto login check error:', err);
-                }
+                } catch (err) { console.error(err); }
             }, 2000);
         }
         return () => { if (authInterval) clearInterval(authInterval); };
@@ -154,9 +165,7 @@ export default function Home() {
             } else {
                 setLoginError(result.message || result.error || 'Sistemde bir hata olustu.');
             }
-        } catch (err) {
-            setLoginError('Sunucuya baglanılamadı.');
-        }
+        } catch (err) { setLoginError('Sunucuya baglanılamadı.'); }
     };
 
     const handleLogout = async () => {
@@ -166,9 +175,7 @@ export default function Home() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type: 'logoff', nick: user })
             });
-        } catch (err) {
-            console.error('Logout error:', err);
-        }
+        } catch (err) { console.error(err); }
         localStorage.removeItem('sessionToken');
         localStorage.removeItem('sessionNick');
         setSessionToken(null);
@@ -176,74 +183,18 @@ export default function Home() {
         setShowAvatarMenu(false);
     };
 
-    const handleAvatarUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
-        if (!allowedTypes.includes(file.type)) {
-            alert('Lütfen sadece PNG, JPG, JPEG veya GIF formatında bir dosya seçin.');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = async () => {
-                if (img.width > 1024 || img.height > 1024) {
-                    alert('Görsel boyutları maksimum 1024x1024 piksel olmalıdır.');
-                    return;
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-                const size = Math.min(img.width, img.height);
-                const xOffset = (img.width - size) / 2;
-                const yOffset = (img.height - size) / 2;
-                ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, 512, 512);
-                const base64Image = canvas.toDataURL('image/png');
-                try {
-                    const res = await fetch('/api/avatar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionToken, avatar: base64Image })
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                        setCacheKey(Date.now());
-                        alert('Avatar başarıyla güncellendi.');
-                    } else {
-                        alert(result.message || 'Avatar yüklenemedi.');
-                    }
-                } catch (err) {
-                    console.error('Avatar upload error:', err);
-                    alert('Sunucu hatası oluştu.');
-                }
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-        setShowAvatarMenu(false);
-    };
-
-    const handleAvatarRemove = async () => {
+    const saveNote = async () => {
+        setNoteSaving(true);
         try {
-            const res = await fetch('/api/avatar', {
+            await fetch('/api/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionToken, action: 'remove' })
+                body: JSON.stringify({ action: 'saveNote', sessionToken, note: noteInput })
             });
-            const result = await res.json();
-            if (result.success) {
-                setCacheKey(Date.now());
-                alert('Avatar kaldırıldı.');
-            } else {
-                alert(result.message || 'Avatar kaldırılamadı.');
-            }
-        } catch (err) {
-            console.error('Avatar remove error:', err);
-            alert('Sunucu hatası oluştu.');
-        }
-        setShowAvatarMenu(false);
+            setEditingNote(false);
+            fetchData(1, false);
+        } catch (err) { console.error(err); }
+        setNoteSaving(false);
     };
 
     const formatLastOnline = (timestamp) => {
@@ -262,7 +213,6 @@ export default function Home() {
 
     const totalMessages = (data || []).reduce((sum, item) => sum + (Number(item?.messages) || 0), 0);
     const totalTopics = (data || []).reduce((sum, item) => sum + (Number(item?.topics) || 0), 0);
-    const totalUsers = (data || []).length;
 
     const getRankColor = (index) => {
         if (index === 0) return darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold';
@@ -277,6 +227,8 @@ export default function Home() {
         if (index === 2) return darkMode ? 'bg-amber-700/5 hover:bg-amber-700/10' : 'bg-amber-700/5 hover:bg-amber-700/10';
         return darkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-100/70';
     };
+
+    const currentUserData = user ? (data || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
 
     return (
         <div className={`min-h-screen p-4 md:p-6 font-sans transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -301,17 +253,14 @@ export default function Home() {
                             <MessageCircle size={16} />
                         </button>
                         <button
-                            onClick={fetchData}
+                            onClick={() => fetchData(1, false)}
                             className={`p-2 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
                         >
                             <RefreshCw size={16} />
                         </button>
                         {!user ? (
                             !showLoginForm ? (
-                                <button
-                                    onClick={() => setShowLoginForm(true)}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                                >
+                                <button onClick={() => setShowLoginForm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
                                     Giriş Yap
                                 </button>
                             ) : null
@@ -322,7 +271,7 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={`/api/avatar?name=${encodeURIComponent(user)}&v=${cacheKey}`}
+                                        src={`/api/avatar?name=${encodeURIComponent(user)}`}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
                                         onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }}
@@ -333,18 +282,11 @@ export default function Home() {
                                 {showAvatarMenu && (
                                     <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-50 overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                                         <button
-                                            onClick={() => fileInputRef.current.click()}
+                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setShowAvatarMenu(false); }}
                                             className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}
                                         >
-                                            <Upload size={14} />
-                                            Avatar Değiştir
-                                        </button>
-                                        <button
-                                            onClick={handleAvatarRemove}
-                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-400 ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-red-50'}`}
-                                        >
-                                            <Trash2 size={14} />
-                                            Avatar Kaldır
+                                            <Edit3 size={14} />
+                                            Not Ekle / Düzenle
                                         </button>
                                         <div className={`border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`} />
                                         <button
@@ -356,11 +298,33 @@ export default function Home() {
                                         </button>
                                     </div>
                                 )}
-                                <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept=".png,.jpg,.jpeg,.gif" className="hidden" />
                             </div>
                         )}
                     </div>
                 </div>
+
+                {editingNote && (
+                    <div className={`p-4 rounded-xl border max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+                        <p className="text-xs font-medium mb-2">Notunuz (max 100 karakter, tek satır):</p>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={noteInput}
+                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 100))}
+                                placeholder="Notunuzu yazın..."
+                                className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                                autoFocus
+                            />
+                            <button onClick={saveNote} disabled={noteSaving} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
+                                <Check size={14} />
+                            </button>
+                            <button onClick={() => setEditingNote(false)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <X size={14} />
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{noteInput.length}/100</p>
+                    </div>
+                )}
 
                 {showLoginForm && !user && (
                     <div className={`p-4 rounded-xl border max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -416,7 +380,7 @@ export default function Home() {
                         <Users size={16} className="text-emerald-500" />
                         <div className="text-xs">
                             <p className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Kişiler</p>
-                            <p className="font-bold text-sm">{totalUsers}</p>
+                            <p className="font-bold text-sm">{total}</p>
                         </div>
                     </div>
                 </div>
@@ -454,39 +418,50 @@ export default function Home() {
                                     filteredData.map((item, index) => {
                                         if (!item || !item.nick) return null;
                                         return (
-                                            <tr key={item.nick} className={`transition-colors ${getRowBg(index)}`}>
-                                                <td className="p-4 text-center font-bold">
-                                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                                                </td>
-                                                <td className="p-4">
-                                                    {!avatarErrors[item.nick] ? (
-                                                        <img
-                                                            src={`/api/avatar?name=${encodeURIComponent(item.nick)}&v=${cacheKey}`}
-                                                            alt={item.nick}
-                                                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                            onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
-                                                        />
-                                                    ) : (
-                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
-                                                            {item.nick.substring(0, 3).toUpperCase()}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className={`p-4 ${getRankColor(index)}`}>{item.nick}</td>
-                                                <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
-                                                <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
-                                                <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                                    {(item.messages || 0) + (item.topics || 0)}
-                                                </td>
-                                                <td className={`p-4 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                                    {formatLastOnline(item.lastonlineostime)}
-                                                </td>
-                                            </tr>
+                                            <React.Fragment key={item.nick}>
+                                                <tr className={`transition-colors ${getRowBg(index)}`}>
+                                                    <td className="p-4 text-center font-bold">
+                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        {!avatarErrors[item.nick] ? (
+                                                            <img
+                                                                src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
+                                                                alt={item.nick}
+                                                                className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
+                                                                onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                            />
+                                                        ) : (
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+                                                                {item.nick.substring(0, 3).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`p-4 ${getRankColor(index)}`}>
+                                                        <div>{item.nick}</div>
+                                                        {item.note && (
+                                                            <div className={`text-[11px] mt-0.5 truncate max-w-[200px] ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.note}</div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.topics}</td>
+                                                    <td className={`p-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.messages}</td>
+                                                    <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                        {(item.messages || 0) + (item.topics || 0)}
+                                                    </td>
+                                                    <td className={`p-4 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                        {formatLastOnline(item.lastonlineostime)}
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
                                         );
                                     })
                                 )}
                             </tbody>
                         </table>
+                        {loadingMore && (
+                            <div className="p-4 text-center text-slate-400 text-sm">Yükleniyor...</div>
+                        )}
+                        <div ref={bottomTriggerRef} className="h-1" />
                     </div>
                 </div>
             </div>
