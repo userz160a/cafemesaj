@@ -35,7 +35,7 @@ export default function Chat() {
         const guestName = sessionStorage.getItem('guestNick');
         if (token && nick) {
             setSessionToken(token);
-            setUser(nick);
+            setUser(nick.charAt(0).toUpperCase() + nick.slice(1));
             setIsGuest(false);
         } else if (guestName) {
             setUser(guestName);
@@ -194,7 +194,9 @@ export default function Chat() {
                             />
                             <div>
                                 <div className="flex items-baseline gap-2">
-                                    <span className={`text-xs font-bold ${msg.is_guest ? 'text-slate-400' : 'text-amber-600'}`}>{msg.nick}</span>
+                                    <span className={`text-xs font-bold ${msg.is_guest ? 'text-slate-400' : 'text-amber-600'}`}>
+                                        {msg.nick ? msg.nick.charAt(0).toUpperCase() + msg.nick.slice(1) : ''}
+                                    </span>                                    
                                     <span className="text-[10px] text-slate-400">{formatTime(msg.created_at)}</span>
                                 </div>
                                 <p className="text-sm text-slate-700 mt-0.5 break-words">{msg.content}</p>
