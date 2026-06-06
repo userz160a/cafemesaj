@@ -9,6 +9,13 @@ function validateGuestNick(nick) {
     return null;
 }
 
+function formatGuestInput(value) {
+    if (!value) return '';
+    const clean = value.replace(/[^A-Za-z0-9]/g, '');
+    if (!clean) return '';
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
 export default function Chat() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -43,11 +50,8 @@ export default function Chat() {
                 const data = await res.json();
                 setMessages(Array.isArray(data) ? data : []);
             }
-        } catch (err) {
-            console.error('Mesaj yuklenemedi:', err);
-        } finally {
-            setLoading(false);
-        }
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
     };
 
     useEffect(() => {
@@ -83,17 +87,20 @@ export default function Chat() {
                 fetchMessages();
             }
         } catch (err) {
-            console.error('Mesaj gonderilemedi:', err);
             setSendError('Sunucu hatası.');
             setInput(content);
         }
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    };
+
+    const handleGuestInputChange = (e) => {
+        const raw = e.target.value;
+        if (raw.startsWith('*')) return;
+        setGuestNick(formatGuestInput(raw));
+        setGuestError('');
     };
 
     const handleGuestJoin = () => {
@@ -124,10 +131,7 @@ export default function Chat() {
                         </button>
                         <h2 className="text-base font-bold text-slate-800">Sohbete Katıl</h2>
                     </div>
-                    <button
-                        onClick={() => window.location.href = '/'}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold transition"
-                    >
+                    <button onClick={() => window.location.href = '/'} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold transition">
                         Giriş Yap
                     </button>
                     <div className="flex items-center gap-2">
@@ -137,20 +141,20 @@ export default function Chat() {
                     </div>
                     <div className="space-y-2">
                         <p className="text-xs text-slate-500">Ziyaretçi olarak katıl (3-10 karakter, ilk harf büyük, sadece A-Z ve 0-9)</p>
-                        <input
-                            type="text"
-                            placeholder="Örn: Guest1"
-                            value={guestNick}
-                            onChange={(e) => { setGuestNick(e.target.value); setGuestError(''); }}
-                            maxLength={10}
-                            onKeyDown={(e) => e.key === 'Enter' && handleGuestJoin()}
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 transition"
-                        />
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">*</span>
+                            <input
+                                type="text"
+                                placeholder="Örn: Guest1"
+                                value={guestNick}
+                                onChange={handleGuestInputChange}
+                                maxLength={10}
+                                onKeyDown={(e) => e.key === 'Enter' && handleGuestJoin()}
+                                className="w-full border border-slate-300 rounded-xl pl-7 pr-3 py-2 text-sm outline-none focus:border-blue-400 transition"
+                            />
+                        </div>
                         {guestError && <p className="text-red-500 text-xs">{guestError}</p>}
-                        <button
-                            onClick={handleGuestJoin}
-                            className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-sm font-semibold transition"
-                        >
+                        <button onClick={handleGuestJoin} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-sm font-semibold transition">
                             Ziyaretçi Olarak Katıl
                         </button>
                     </div>
@@ -224,11 +228,7 @@ export default function Chat() {
                                 maxLength={500}
                                 className="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400 transition"
                             />
-                            <button
-                                onClick={sendMessage}
-                                disabled={!input.trim()}
-                                className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white p-2 rounded-xl transition"
-                            >
+                            <button onClick={sendMessage} disabled={!input.trim()} className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white p-2 rounded-xl transition">
                                 <Send size={18} />
                             </button>
                         </div>
