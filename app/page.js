@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X } from 'lucide-react';
 
 export default function Home() {
@@ -24,9 +24,33 @@ export default function Home() {
     const [editingNote, setEditingNote] = useState(false);
     const [noteInput, setNoteInput] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
+    const [isLoginNickValid, setIsLoginNickValid] = useState(false);
     const menuRef = useRef(null);
     const observerRef = useRef(null);
     const bottomTriggerRef = useRef(null);
+
+    const validateNickFormat = (value) => {
+        const regex = /^[A-ZÇĞİÖŞÜa-zçğıöşü0-9].*#[0-9]{4}$/;
+        setIsLoginNickValid(regex.test(value));
+    };
+
+    const handleLoginNickChange = (e) => {
+        let value = e.target.value;
+
+        if (value.length > 0) {
+            value = value.charAt(0).toUpperCase() + value.slice(1);
+        }
+
+        const hashIndex = value.indexOf("#");
+        if (hashIndex !== -1) {
+            const beforeHash = value.substring(0, hashIndex + 1);
+            const afterHash = value.substring(hashIndex + 1).replace(/\D/g, "");
+            value = beforeHash + afterHash.substring(0, 4);
+        }
+
+        setLoginNick(value);
+        validateNickFormat(value);
+    };
 
     useEffect(() => {
         const checkIpLogin = async () => {
@@ -84,7 +108,7 @@ export default function Home() {
             }
         } catch (error) {
             console.error('Data fetch error:', error);
-        } finally {
+        } declare {
             setLoading(false);
             setLoadingMore(false);
         }
@@ -149,7 +173,7 @@ export default function Home() {
 
     const startLogin = async (e) => {
         e.preventDefault();
-        if (!loginNick.trim()) return;
+        if (!isLoginNickValid || !loginNick.trim()) return;
         setLoginError('');
         try {
             const res = await fetch('/api/stats', {
@@ -330,21 +354,30 @@ export default function Home() {
                     <div className={`p-4 rounded-xl border max-w-md ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
                         {loginError && <p className="text-red-500 text-sm mb-3 font-medium">{loginError}</p>}
                         {loginStep === 'username' ? (
-                            <form onSubmit={startLogin} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Nick#0000"
-                                    value={loginNick}
-                                    onChange={(e) => setLoginNick(e.target.value)}
-                                    className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                                    autoFocus
-                                />
-                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
-                                    Kod Üret
-                                </button>
-                                <button type="button" onClick={() => setShowLoginForm(false)} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                    İptal
-                                </button>
+                            <form onSubmit={startLogin} className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Nick#0000"
+                                        value={loginNick}
+                                        onChange={handleLoginNickChange}
+                                        className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                                        autoFocus
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        disabled={!isLoginNickValid}
+                                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition text-white ${isLoginNickValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-400 cursor-not-allowed'}`}
+                                    >
+                                        Kod Üret
+                                    </button>
+                                    <button type="button" onClick={() => { setShowLoginForm(false); setLoginNick(''); setIsLoginNickValid(false); }} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                        İptal
+                                    </button>
+                                </div>
+                                <p className={`text-[11px] ${isLoginNickValid ? 'text-green-500' : 'text-slate-400'}`}>
+                                    Format: Nick#0000
+                                </p>
                             </form>
                         ) : (
                             <div className="space-y-3">
@@ -353,7 +386,7 @@ export default function Home() {
                                     !caferank login {generatedCode}
                                 </div>
                                 <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
-                                <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); setLoginNick(''); setIsLoginNickValid(false); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
                                     İptal
                                 </button>
                             </div>
