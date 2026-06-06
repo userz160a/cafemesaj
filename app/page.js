@@ -113,14 +113,15 @@ export default function Home() {
                     const res = await fetch('/api/stats', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'login', nick: loginNick, code: generatedCode })
+                        body: JSON.stringify({ action: 'login', nick: loginNick.trim(), code: generatedCode.trim() })
                     });
+                    if (!res.ok) return;
                     const result = await res.json();
-                    if (result.success && result.step === 'success') {
+                    if (result.success && (result.step === 'success' || result.token)) {
                         localStorage.setItem('sessionToken', result.token);
-                        localStorage.setItem('sessionNick', result.nick);
+                        localStorage.setItem('sessionNick', result.nick || loginNick.trim());
                         setSessionToken(result.token);
-                        setUser(result.nick);
+                        setUser(result.nick || loginNick.trim());
                         setLoginStep('username');
                         setLoginNick('');
                         setGeneratedCode('');
@@ -289,8 +290,11 @@ export default function Home() {
                                 <button
                                     onClick={() => setShowLoginForm(true)}
                                     className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                                ) : null
-                            ) : (
+                                >
+                                    Giriş Yap
+                                </button>
+                            ) : null
+                        ) : (
                             <div className="relative" ref={menuRef}>
                                 <button
                                     onClick={() => setShowAvatarMenu(!showAvatarMenu)}
@@ -348,6 +352,7 @@ export default function Home() {
                                     value={loginNick}
                                     onChange={(e) => setLoginNick(e.target.value)}
                                     className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                                    autoFocus
                                 />
                                 <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
                                     Kod Üret
@@ -418,7 +423,7 @@ export default function Home() {
                                     <th className="p-4">Toplam</th>
                                     <th className="p-4">Son Görülme</th>
                                 </tr>
-                            </thead>
+                            </table>
                             <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                                 {loading ? (
                                     <tr><td colSpan={7} className="p-8 text-center text-slate-400">Yükleniyor...</td></tr>
