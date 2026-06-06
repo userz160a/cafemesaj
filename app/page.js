@@ -108,7 +108,7 @@ export default function Home() {
             }
         } catch (error) {
             console.error('Data fetch error:', error);
-        } declare {
+        } finally {
             setLoading(false);
             setLoadingMore(false);
         }
