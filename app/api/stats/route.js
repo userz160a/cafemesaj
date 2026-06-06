@@ -10,9 +10,45 @@ function normalizeNick(nick) {
     return nick.trim().toLowerCase();
 }
 
-export async function GET() {
+function getClientIp(req) {
+    let ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
+    if (ip && ip.includes(',')) {
+        ip = ip.split(',')[0].trim();
+    }
+    return ip || '127.0.0.1';
+}
+
+export async function GET(req) {
     try {
         if (!supabase) return NextResponse.json({ success: false, error: 'Supabase baglantisi kurulamadi.' }, { status: 500 });
+        
+        const url = new URL(req.url);
+        const action = url.searchParams.get('action');
+        
+        if (action === 'checkIp') {
+            const ip = getClientIp(req);
+            const { data: ipData, error: ipError } = await supabase
+                .from('user_ips')
+                .select('nick')
+                .eq('ip_address', ip);
+                
+            if (!ipError && ipData && ipData.length > 0) {
+                const matchedNick = ipData[0].nick;
+                const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+                const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+                
+                await supabase.from('sessions').delete().ilike('nick', matchedNick);
+                const { error: sessionError } = await supabase
+                    .from('sessions')
+                    .insert([{ token, nick: matchedNick, expires_at: sessionExpires }]);
+                    
+                if (!sessionError) {
+                    return NextResponse.json({ success: true, autoLogin: true, token, nick: matchedNick });
+                }
+            }
+            return NextResponse.json({ success: false, autoLogin: false });
+        }
+
         const { data, error } = await supabase.from('stats').select('*').order('messages', { ascending: false });
         if (error) throw error;
         return NextResponse.json(data);
@@ -28,6 +64,7 @@ export async function POST(req) {
         const { type, nick, code, action, sessionToken, avatar, messageContent } = body;
         const cleanMessage = messageContent ? messageContent.replace(/[\r\n]+/g, ' ').trim() : '';
         const fullNick = nick ? nick.trim() : '';
+        const currentIp = getClientIp(req);
 
         if (type === 'verification' || (cleanMessage && /!caferank\s+login\s+\d+/i.test(cleanMessage))) {
             let extractedCode = code;
@@ -78,6 +115,17 @@ export async function POST(req) {
                     .from('sessions')
                     .insert([{ token, nick: matchingCode.nick, expires_at: sessionExpires }]);
                 if (sessionError) throw sessionError;
+                
+                const { data: existingIp } = await supabase
+                    .from('user_ips')
+                    .select('*')
+                    .eq('nick', matchingCode.nick)
+                    .eq('ip_address', currentIp);
+                    
+                if (!existingIp || existingIp.length === 0) {
+                    await supabase.from('user_ips').insert([{ nick: matchingCode.nick, ip_address: currentIp }]);
+                }
+
                 await supabase.from('active_codes').delete().ilike('nick', fullNick);
                 return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
             }
