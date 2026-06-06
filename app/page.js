@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown, MessageCircle } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, Upload, LogOut, ChevronDown, MessageCircle, Trash2 } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
@@ -179,13 +179,11 @@ export default function Home() {
     const handleAvatarUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
             alert('Lütfen sadece PNG, JPG, JPEG veya GIF formatında bir dosya seçin.');
             return;
         }
-
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
@@ -194,19 +192,15 @@ export default function Home() {
                     alert('Görsel boyutları maksimum 1024x1024 piksel olmalıdır.');
                     return;
                 }
-
                 const canvas = document.createElement('canvas');
                 canvas.width = 512;
                 canvas.height = 512;
                 const ctx = canvas.getContext('2d');
-                
                 const size = Math.min(img.width, img.height);
                 const xOffset = (img.width - size) / 2;
                 const yOffset = (img.height - size) / 2;
-                
                 ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, 512, 512);
                 const base64Image = canvas.toDataURL('image/png');
-
                 try {
                     const res = await fetch('/api/avatar', {
                         method: 'POST',
@@ -228,6 +222,27 @@ export default function Home() {
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
+        setShowAvatarMenu(false);
+    };
+
+    const handleAvatarRemove = async () => {
+        try {
+            const res = await fetch('/api/avatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionToken, action: 'remove' })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setCacheKey(Date.now());
+                alert('Avatar kaldırıldı.');
+            } else {
+                alert(result.message || 'Avatar kaldırılamadı.');
+            }
+        } catch (err) {
+            console.error('Avatar remove error:', err);
+            alert('Sunucu hatası oluştu.');
+        }
         setShowAvatarMenu(false);
     };
 
@@ -280,6 +295,12 @@ export default function Home() {
                             </div>
                         </button>
                         <button
+                            onClick={() => window.open('/chat', '_blank')}
+                            className={`p-2 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
+                        >
+                            <MessageCircle size={16} />
+                        </button>
+                        <button
                             onClick={fetchData}
                             className={`p-2 rounded-lg border transition ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-white' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
                         >
@@ -319,11 +340,11 @@ export default function Home() {
                                             Avatar Değiştir
                                         </button>
                                         <button
-                                            onClick={() => window.open('/chat', '_blank')}
-                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}
+                                            onClick={handleAvatarRemove}
+                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-400 ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-red-50'}`}
                                         >
-                                            <MessageCircle size={14} />
-                                            Sohbeti aç
+                                            <Trash2 size={14} />
+                                            Avatar Kaldır
                                         </button>
                                         <div className={`border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`} />
                                         <button
