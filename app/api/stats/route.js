@@ -21,27 +21,27 @@ function getClientIp(req) {
 export async function GET(req) {
     try {
         if (!supabase) return NextResponse.json({ success: false, error: 'Supabase baglantisi kurulamadi.' }, { status: 500 });
-        
+
         const url = new URL(req.url);
         const action = url.searchParams.get('action');
-        
+
         if (action === 'checkIp') {
             const ip = getClientIp(req);
             const { data: ipData, error: ipError } = await supabase
                 .from('user_ips')
                 .select('nick')
                 .eq('ip_address', ip);
-                
+
             if (!ipError && ipData && ipData.length > 0) {
                 const matchedNick = ipData[0].nick;
                 const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
                 const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-                
+
                 await supabase.from('sessions').delete().ilike('nick', matchedNick);
                 const { error: sessionError } = await supabase
                     .from('sessions')
                     .insert([{ token, nick: matchedNick, expires_at: sessionExpires }]);
-                    
+
                 if (!sessionError) {
                     return NextResponse.json({ success: true, autoLogin: true, token, nick: matchedNick });
                 }
@@ -66,6 +66,11 @@ export async function POST(req) {
         const fullNick = nick ? nick.trim() : '';
         const currentIp = getClientIp(req);
 
+        await supabase
+            .from('active_codes')
+            .delete()
+            .lt('expires_at', new Date().toISOString());
+
         if (type === 'verification' || (cleanMessage && /!caferank\s+login\s+\d+/i.test(cleanMessage))) {
             let extractedCode = code;
             if (!extractedCode && cleanMessage) {
@@ -73,13 +78,18 @@ export async function POST(req) {
                 extractedCode = match ? match[1] : null;
             }
             if (!extractedCode || !fullNick) return NextResponse.json({ success: false, message: 'Kod veya nick eksik.' });
-            const now = new Date().toISOString();
+
             const { data: activeCodes, error: fetchError } = await supabase
-                .from('active_codes').select('*').eq('code', extractedCode).gt('expires_at', now);
+                .from('active_codes')
+                .select('*')
+                .eq('code', extractedCode);
+
             if (fetchError || !activeCodes || activeCodes.length === 0)
                 return NextResponse.json({ success: false, message: 'Kod bulunamadi veya suresi doldu.' });
+
             const matchingCode = activeCodes.find(c => normalizeNick(c.nick) === normalizeNick(fullNick));
             if (!matchingCode) return NextResponse.json({ success: false, message: 'Nick ile kod eslesmedi.' });
+
             await supabase.from('active_codes').update({ verified: true }).eq('id', matchingCode.id);
             return NextResponse.json({ success: true, message: 'Kod basariyla dogrulandi.' });
         }
@@ -90,7 +100,6 @@ export async function POST(req) {
         }
 
         if (action === 'login') {
-            const now = new Date().toISOString();
             if (!code) {
                 const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
                 const expiresAt = new Date(Date.now() + 120000).toISOString();
@@ -101,35 +110,39 @@ export async function POST(req) {
                 if (insertError) return NextResponse.json({ success: false, message: `Veritabani Hatasi: ${insertError.message}` });
                 return NextResponse.json({ success: true, step: 'wait', code: generatedCode });
             }
+
             const { data: activeCodes, error: codeError } = await supabase
-                .from('active_codes').select('*').eq('code', code).gt('expires_at', now);
+                .from('active_codes')
+                .select('*')
+                .eq('code', code)
+                .eq('verified', true);
+
             if (codeError || !activeCodes || activeCodes.length === 0)
-                return NextResponse.json({ success: false, message: 'Kullanici adi veya dogrulama kodu hatali ya da suresi doldu.' });
+                return NextResponse.json({ success: false, message: 'Kod dogrulanmadi, lutfen cafede komutu yazin.' });
+
             const matchingCode = activeCodes.find(c => normalizeNick(c.nick) === normalizeNick(fullNick));
             if (!matchingCode) return NextResponse.json({ success: false, message: 'Kullanici adi veya dogrulama kodu hatali.' });
-            if (matchingCode.verified) {
-                const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-                const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-                await supabase.from('sessions').delete().ilike('nick', fullNick);
-                const { error: sessionError } = await supabase
-                    .from('sessions')
-                    .insert([{ token, nick: matchingCode.nick, expires_at: sessionExpires }]);
-                if (sessionError) throw sessionError;
-                
-                const { data: existingIp } = await supabase
-                    .from('user_ips')
-                    .select('*')
-                    .eq('nick', matchingCode.nick)
-                    .eq('ip_address', currentIp);
-                    
-                if (!existingIp || existingIp.length === 0) {
-                    await supabase.from('user_ips').insert([{ nick: matchingCode.nick, ip_address: currentIp }]);
-                }
 
-                await supabase.from('active_codes').delete().ilike('nick', fullNick);
-                return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
+            const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+            const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            await supabase.from('sessions').delete().ilike('nick', fullNick);
+            const { error: sessionError } = await supabase
+                .from('sessions')
+                .insert([{ token, nick: matchingCode.nick, expires_at: sessionExpires }]);
+            if (sessionError) throw sessionError;
+
+            const { data: existingIp } = await supabase
+                .from('user_ips')
+                .select('*')
+                .ilike('nick', matchingCode.nick)
+                .eq('ip_address', currentIp);
+
+            if (!existingIp || existingIp.length === 0) {
+                await supabase.from('user_ips').insert([{ nick: matchingCode.nick, ip_address: currentIp }]);
             }
-            return NextResponse.json({ success: false, message: 'Kod cafede henuz dogrulanmadi. Lutfen bekleyin veya tekrar deneyin.' });
+
+            await supabase.from('active_codes').delete().ilike('nick', fullNick);
+            return NextResponse.json({ success: true, step: 'success', token, nick: matchingCode.nick });
         }
 
         if (action === 'updateAvatar') {
