@@ -41,7 +41,7 @@ export async function GET(request) {
             const base64Data = localAvatar.image_data.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
             return new NextResponse(buffer, {
-                headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' }
+                headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store, max-age=0' }
             });
         }
 
