@@ -423,7 +423,7 @@ export default function Home() {
                                     <th className="p-4">Toplam</th>
                                     <th className="p-4">Son Görülme</th>
                                 </tr>
-                            </table>
+                            </thead>
                             <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                                 {loading ? (
                                     <tr><td colSpan={7} className="p-8 text-center text-slate-400">Yükleniyor...</td></tr>
