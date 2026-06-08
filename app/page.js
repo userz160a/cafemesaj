@@ -121,6 +121,7 @@ export default function Home() {
                         );
                         setData(sorted);
                         setStaticData(sorted);
+                        setAvatarErrors({});
                     } else {
                         if (append) {
                             setData(prev => {
@@ -283,6 +284,45 @@ export default function Home() {
         } catch (e) { return '-'; }
     };
 
+    const getAvatarSrc = (item) => {
+        if (avatarErrors[item.nick] === 'custom') {
+            const baseNick = item.nick.split('#')[0].toLowerCase();
+            return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+        }
+        if (avatarErrors[item.nick] === 'atelier') return null;
+        if (item.avatar_url) return item.avatar_url;
+        const baseNick = item.nick.split('#')[0].toLowerCase();
+        return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+    };
+
+    const handleAvatarError = (item) => {
+        setAvatarErrors(prev => {
+            if (item.avatar_url && prev[item.nick] !== 'custom') {
+                return { ...prev, [item.nick]: 'custom' };
+            }
+            return { ...prev, [item.nick]: 'atelier' };
+        });
+    };
+
+    const renderAvatar = (item, className) => {
+        const src = getAvatarSrc(item);
+        if (src) {
+            return (
+                <img
+                    src={src}
+                    alt={item.nick}
+                    className={className}
+                    onError={() => handleAvatarError(item)}
+                />
+            );
+        }
+        return (
+            <div className={`${className} bg-slate-600 flex items-center justify-center text-white font-bold`}>
+                {item.nick.split('#')[0].substring(0, 3).toUpperCase()}
+            </div>
+        );
+    };
+
     const searchFilteredData = (staticData || []).map((item, index) => ({ ...item, originalIndex: index }));
 
     const filteredData = searchFilteredData.filter(item =>
@@ -307,20 +347,6 @@ export default function Home() {
     };
 
     const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
-
-    const getAvatarSrc = (item) => {
-        if (item.avatar_url) return item.avatar_url;
-        const baseNick = item.nick.split('#')[0].toLowerCase();
-        return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
-    };
-
-    const handleAvatarError = (nick) => {
-        setAvatarErrors(prev => ({ ...prev, [nick]: true }));
-    };
-
-    const getFallbackAvatar = (nick) => {
-        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' fill='%23334155'/></svg>`;
-    };
 
     const dm = {
         bg: 'bg-[#0a0c10]',
@@ -381,12 +407,10 @@ export default function Home() {
                                     onClick={() => setShowAvatarMenu(!showAvatarMenu)}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
-                                    <img
-                                        src={currentUserData ? (avatarErrors[user] ? getFallbackAvatar(user) : getAvatarSrc(currentUserData)) : getFallbackAvatar(user)}
-                                        alt={user}
-                                        className="w-6 h-6 rounded-md object-cover"
-                                        onError={() => handleAvatarError(user)}
-                                    />
+                                    {currentUserData
+                                        ? renderAvatar(currentUserData, 'w-6 h-6 rounded-md object-cover')
+                                        : <div className="w-6 h-6 rounded-md bg-slate-600 flex items-center justify-center text-white text-[9px] font-bold">{user.split('#')[0].substring(0, 3).toUpperCase()}</div>
+                                    }
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
                                 </button>
@@ -571,12 +595,7 @@ export default function Home() {
                                                         {item.originalIndex === 0 ? '🥇' : item.originalIndex === 1 ? '🥈' : item.originalIndex === 2 ? '🥉' : item.originalIndex + 1}
                                                     </td>
                                                     <td className="p-4">
-                                                        <img
-                                                            src={avatarErrors[item.nick] ? getFallbackAvatar(item.nick) : getAvatarSrc(item)}
-                                                            alt={item.nick}
-                                                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                            onError={() => handleAvatarError(item.nick)}
-                                                        />
+                                                        {renderAvatar(item, 'w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30 text-xs')}
                                                     </td>
                                                     <td className={`p-4 ${getRankColor(item.originalIndex)}`}>
                                                         <div>{item.nick}</div>
