@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X, Image, Play, Pause } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X, Play, Pause } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
@@ -25,9 +25,6 @@ export default function Home() {
     const [editingNote, setEditingNote] = useState(false);
     const [noteInput, setNoteInput] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
-    const [editingAvatar, setEditingAvatar] = useState(false);
-    const [avatarInput, setAvatarInput] = useState('');
-    const [avatarSaving, setAvatarSaving] = useState(false);
     const [isLoginNickValid, setIsLoginNickValid] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const menuRef = useRef(null);
@@ -260,41 +257,10 @@ export default function Home() {
                 setData(prev => updateState(prev));
                 setStaticData(prev => updateState(prev));
                 setEditingNote(false);
-                setTimeout(() => {
-                    fetchData(1, false);
-                }, 300);
+                fetchData(1, false);
             }
         } catch (err) { console.error(err); }
         setNoteSaving(false);
-    };
-
-    const saveAvatar = async () => {
-        if (!avatarInput.trim()) return;
-        setAvatarSaving(true);
-        try {
-            const res = await fetch('/api/stats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'saveAvatar', sessionToken, avatarUrl: avatarInput.trim() })
-            });
-            if (res.ok) {
-                setAvatarErrors(prev => {
-                    const next = { ...prev };
-                    delete next[user];
-                    return next;
-                });
-                const updateState = (prevList) => prevList.map(item => 
-                    item.nick.toLowerCase() === user.toLowerCase() ? { ...item, avatar_url: avatarInput.trim() } : item
-                );
-                setData(prev => updateState(prev));
-                setStaticData(prev => updateState(prev));
-                setEditingAvatar(false);
-                setTimeout(() => {
-                    fetchData(1, false);
-                }, 300);
-            }
-        } catch (err) { console.error(err); }
-        setAvatarSaving(false);
     };
 
     const formatLastOnline = (val) => {
@@ -344,9 +310,6 @@ export default function Home() {
         if (item.avatar_url) return item.avatar_url;
         const cleanNick = (item.nick || '').split('#')[0];
         const upperPrefix = cleanNick.substring(0, 3).toUpperCase();
-        if (avatarErrors[item.nick]) {
-            return `/api/avatar?name=${encodeURIComponent(upperPrefix)}`;
-        }
         return `/api/avatar?name=${encodeURIComponent(upperPrefix)}`;
     };
 
@@ -410,7 +373,7 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={currentUserData?.avatar_url || (currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`)}
+                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`)}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
                                         onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
@@ -421,18 +384,11 @@ export default function Home() {
                                 {showAvatarMenu && (
                                     <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-50 overflow-hidden ${darkMode ? `${dm.card} shadow-black/50` : 'bg-white border-slate-200'}`}>
                                         <button
-                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setEditingAvatar(false); setShowAvatarMenu(false); }}
+                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setShowAvatarMenu(false); }}
                                             className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}
                                         >
                                             <Edit3 size={14} />
                                             Not Ekle / Düzenle
-                                        </button>
-                                        <button
-                                            onClick={() => { setEditingAvatar(true); setAvatarInput(currentUserData?.avatar_url || ''); setEditingNote(false); setShowAvatarMenu(false); }}
-                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}
-                                        >
-                                            <Image size={14} />
-                                            Avatar Ekle / Düzenle
                                         </button>
                                         <div className={`border-t ${darkMode ? dm.border : 'border-slate-100'}`} />
                                         <button
@@ -469,28 +425,6 @@ export default function Home() {
                             </button>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">{noteInput.length}/200</p>
-                    </div>
-                )}
-
-                {editingAvatar && (
-                    <div className={`p-4 rounded-xl border max-w-md ${darkMode ? `${dm.card}` : 'bg-white border-slate-200 shadow-sm'}`}>
-                        <p className="text-xs font-medium mb-2">Avatar URL'si:</p>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={avatarInput}
-                                onChange={(e) => setAvatarInput(e.target.value)}
-                                placeholder="https://example.com/avatar.png"
-                                className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                                autoFocus
-                            />
-                            <button onClick={saveAvatar} disabled={avatarSaving} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
-                                <Check size={14} />
-                            </button>
-                            <button onClick={() => setEditingAvatar(false)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                <X size={14} />
-                            </button>
-                        </div>
                     </div>
                 )}
 
