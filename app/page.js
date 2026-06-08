@@ -309,11 +309,17 @@ export default function Home() {
     const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
 
     const getAvatarSrc = (item) => {
-        if (avatarErrors[item.nick]) {
-            const baseNick = item.nick.split('#')[0].toLowerCase();
-            return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
-        }
-        return item.avatar_url || `/api/avatar?name=${encodeURIComponent(item.nick)}`;
+        if (item.avatar_url) return item.avatar_url;
+        const baseNick = item.nick.split('#')[0].toLowerCase();
+        return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+    };
+
+    const handleAvatarError = (nick) => {
+        setAvatarErrors(prev => ({ ...prev, [nick]: true }));
+    };
+
+    const getFallbackAvatar = (nick) => {
+        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' fill='%23334155'/></svg>`;
     };
 
     const dm = {
@@ -376,10 +382,10 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`}
+                                        src={currentUserData ? (avatarErrors[user] ? getFallbackAvatar(user) : getAvatarSrc(currentUserData)) : getFallbackAvatar(user)}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
-                                        onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
+                                        onError={() => handleAvatarError(user)}
                                     />
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
@@ -566,10 +572,10 @@ export default function Home() {
                                                     </td>
                                                     <td className="p-4">
                                                         <img
-                                                            src={getAvatarSrc(item)}
+                                                            src={avatarErrors[item.nick] ? getFallbackAvatar(item.nick) : getAvatarSrc(item)}
                                                             alt={item.nick}
                                                             className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                            onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                            onError={() => handleAvatarError(item.nick)}
                                                         />
                                                     </td>
                                                     <td className={`p-4 ${getRankColor(item.originalIndex)}`}>
