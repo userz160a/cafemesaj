@@ -1,9 +1,10 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X, Image, Play, Pause } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
+    const [staticData, setStaticData] = useState([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -24,7 +25,11 @@ export default function Home() {
     const [editingNote, setEditingNote] = useState(false);
     const [noteInput, setNoteInput] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
+    const [editingAvatar, setEditingAvatar] = useState(false);
+    const [avatarInput, setAvatarInput] = useState('');
+    const [avatarSaving, setAvatarSaving] = useState(false);
     const [isLoginNickValid, setIsLoginNickValid] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(true);
     const menuRef = useRef(null);
     const observerRef = useRef(null);
     const bottomTriggerRef = useRef(null);
@@ -85,6 +90,16 @@ export default function Home() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const cleanInvalidNicks = async () => {
+        try {
+            await fetch('/api/stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'cleanInvalidNicks' })
+            });
+        } catch (err) { console.error(err); }
+    };
+
     const fetchData = useCallback(async (pageNum = 1, append = false) => {
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
@@ -99,17 +114,23 @@ export default function Home() {
             if (res.ok) {
                 const json = await res.json();
                 if (json.data) {
-                    const sorted = [...(append ? [] : []), ...json.data].sort(
-                        (a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0))
-                    );
-                    if (append) {
-                        setData(prev => {
-                            const combined = [...prev, ...json.data];
-                            const unique = Array.from(new Map(combined.map(item => [item.nick, item])).values());
-                            return unique.sort((a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0)));
-                        });
-                    } else {
+                    if (pageNum === 1) {
+                        await cleanInvalidNicks();
+                        const sorted = [...json.data].sort(
+                            (a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0))
+                        );
                         setData(sorted);
+                        setStaticData(sorted);
+                    } else {
+                        if (append) {
+                            setData(prev => {
+                                const combined = [...prev, ...json.data];
+                                const unique = Array.from(new Map(combined.map(item => [item.nick, item])).values());
+                                const sortedUnique = unique.sort((a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0)));
+                                setStaticData(sortedUnique);
+                                return sortedUnique;
+                            });
+                        }
                     }
                     setTotal(json.total || 0);
                     setHasMore((pageNum * 40) < (json.total || 0));
@@ -127,9 +148,15 @@ export default function Home() {
 
     useEffect(() => {
         fetchData(1, false);
-        const interval = setInterval(() => fetchData(1, false), 60000);
-        return () => clearInterval(interval);
     }, [fetchData]);
+
+    useEffect(() => {
+        if (!autoRefresh) return;
+        const interval = setInterval(() => {
+            fetchData(1, false);
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [fetchData, autoRefresh]);
 
     useEffect(() => {
         if (!bottomTriggerRef.current) return;
@@ -232,6 +259,20 @@ export default function Home() {
         setNoteSaving(false);
     };
 
+    const saveAvatar = async () => {
+        setAvatarSaving(true);
+        try {
+            await fetch('/api/stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'saveAvatar', sessionToken, avatarUrl: avatarInput })
+            });
+            setEditingAvatar(false);
+            fetchData(1, false);
+        } catch (err) { console.error(err); }
+        setAvatarSaving(false);
+    };
+
     const formatLastOnline = (timestamp) => {
         if (!timestamp) return '-';
         try {
@@ -242,12 +283,14 @@ export default function Home() {
         } catch (e) { return '-'; }
     };
 
-    const filteredData = (data || []).filter(item =>
+    const searchFilteredData = (staticData || []).map((item, index) => ({ ...item, originalIndex: index }));
+
+    const filteredData = searchFilteredData.filter(item =>
         item && item.nick && item.nick.toLowerCase().includes((search || '').toLowerCase())
     );
 
-    const totalMessages = (data || []).reduce((sum, item) => sum + (Number(item?.messages) || 0), 0);
-    const totalTopics = (data || []).reduce((sum, item) => sum + (Number(item?.topics) || 0), 0);
+    const totalMessages = (staticData || []).reduce((sum, item) => sum + (Number(item?.messages) || 0), 0);
+    const totalTopics = (staticData || []).reduce((sum, item) => sum + (Number(item?.topics) || 0), 0);
 
     const getRankColor = (index) => {
         if (index === 0) return darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold';
@@ -263,7 +306,15 @@ export default function Home() {
         return darkMode ? 'hover:bg-slate-800/60' : 'hover:bg-slate-100/70';
     };
 
-    const currentUserData = user ? (data || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
+    const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
+
+    const getAvatarSrc = (item) => {
+        if (avatarErrors[item.nick]) {
+            const baseNick = item.nick.split('#')[0].toLowerCase();
+            return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+        }
+        return item.avatar_url || `/api/avatar?name=${encodeURIComponent(item.nick)}`;
+    };
 
     const dm = {
         bg: 'bg-[#0a0c10]',
@@ -295,6 +346,12 @@ export default function Home() {
                             </div>
                         </button>
                         <button
+                            onClick={() => setAutoRefresh(!autoRefresh)}
+                            className={`p-2 rounded-lg border transition text-white ${autoRefresh ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-500' : 'bg-rose-600 hover:bg-rose-700 border-rose-500'}`}
+                        >
+                            {autoRefresh ? <Play size={16} /> : <Pause size={16} />}
+                        </button>
+                        <button
                             onClick={() => window.open('/chat', '_blank')}
                             className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
                         >
@@ -319,10 +376,10 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={`/api/avatar?name=${encodeURIComponent(user)}`}
+                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
-                                        onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }}
+                                        onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
                                     />
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
@@ -330,11 +387,18 @@ export default function Home() {
                                 {showAvatarMenu && (
                                     <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-50 overflow-hidden ${darkMode ? `${dm.card} shadow-black/50` : 'bg-white border-slate-200'}`}>
                                         <button
-                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setShowAvatarMenu(false); }}
+                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setEditingAvatar(false); setShowAvatarMenu(false); }}
                                             className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}
                                         >
                                             <Edit3 size={14} />
                                             Not Ekle / Düzenle
+                                        </button>
+                                        <button
+                                            onClick={() => { setEditingAvatar(true); setAvatarInput(currentUserData?.avatar_url || ''); setEditingNote(false); setShowAvatarMenu(false); }}
+                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}
+                                        >
+                                            <Image size={14} />
+                                            Avatar Ekle / Düzenle
                                         </button>
                                         <div className={`border-t ${darkMode ? dm.border : 'border-slate-100'}`} />
                                         <button
@@ -371,6 +435,28 @@ export default function Home() {
                             </button>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">{noteInput.length}/100</p>
+                    </div>
+                )}
+
+                {editingAvatar && (
+                    <div className={`p-4 rounded-xl border max-w-md ${darkMode ? `${dm.card}` : 'bg-white border-slate-200 shadow-sm'}`}>
+                        <p className="text-xs font-medium mb-2">Avatar URL'si:</p>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={avatarInput}
+                                onChange={(e) => setAvatarInput(e.target.value)}
+                                placeholder="https://example.com/avatar.png"
+                                className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                                autoFocus
+                            />
+                            <button onClick={saveAvatar} disabled={avatarSaving} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
+                                <Check size={14} />
+                            </button>
+                            <button onClick={() => setEditingAvatar(false)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <X size={14} />
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -470,29 +556,23 @@ export default function Home() {
                                 ) : filteredData.length === 0 ? (
                                     <tr><td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td></tr>
                                 ) : (
-                                    filteredData.map((item, index) => {
+                                    filteredData.map((item) => {
                                         if (!item || !item.nick) return null;
                                         return (
                                             <React.Fragment key={item.nick}>
-                                                <tr className={`transition-colors ${getRowBg(index)}`}>
+                                                <tr className={`transition-colors ${getRowBg(item.originalIndex)}`}>
                                                     <td className="p-4 text-center font-bold">
-                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                                                        {item.originalIndex === 0 ? '🥇' : item.originalIndex === 1 ? '🥈' : item.originalIndex === 2 ? '🥉' : item.originalIndex + 1}
                                                     </td>
                                                     <td className="p-4">
-                                                        {!avatarErrors[item.nick] ? (
-                                                            <img
-                                                                src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
-                                                                alt={item.nick}
-                                                                className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                                onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
-                                                            />
-                                                        ) : (
-                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-[#1a1d27] text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
-                                                                {item.nick.substring(0, 3).toUpperCase()}
-                                                            </div>
-                                                        )}
+                                                        <img
+                                                            src={getAvatarSrc(item)}
+                                                            alt={item.nick}
+                                                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
+                                                            onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                        />
                                                     </td>
-                                                    <td className={`p-4 ${getRankColor(index)}`}>
+                                                    <td className={`p-4 ${getRankColor(item.originalIndex)}`}>
                                                         <div>{item.nick}</div>
                                                         {item.note && (
                                                             <div className={`text-[11px] mt-0.5 truncate max-w-[200px] ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.note}</div>
