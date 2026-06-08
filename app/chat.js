@@ -11,8 +11,11 @@ export default function Chat() {
     const [isMod, setIsMod] = useState(false);
     const [replyingTo, setReplyingTo] = useState(null);
     const [activeMenu, setActiveMenu] = useState(null);
+    const scrollContainerRef = useRef(null);
     const bottomRef = useRef(null);
     const menuTimeoutRef = useRef(null);
+    const isFirstLoad = useRef(true);
+    const userScrolledUp = useRef(false);
 
     useEffect(() => {
         const token = localStorage.getItem('sessionToken');
@@ -23,6 +26,28 @@ export default function Chat() {
             checkModStatus(nick);
         }
     }, []);
+
+    useEffect(() => {
+        if (messages.length > 0) {
+            if (isFirstLoad.current) {
+                bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+                isFirstLoad.current = false;
+            } else if (!userScrolledUp.current) {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }, [messages]);
+
+    const handleScroll = () => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+        if (isAtBottom) {
+            userScrolledUp.current = false;
+        } else {
+            userScrolledUp.current = true;
+        }
+    };
 
     const checkModStatus = async (nick) => {
         try {
@@ -63,6 +88,7 @@ export default function Chat() {
         setInput('');
         const currentReply = replyingTo;
         setReplyingTo(null);
+        userScrolledUp.current = false;
 
         if (content.startsWith('!ban ') && isMod) {
             const target = content.replace('!ban ', '').replace('*', '').trim();
@@ -161,7 +187,7 @@ export default function Chat() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col select-none">
+        <div className="min-h-screen h-screen bg-slate-900 text-slate-100 flex flex-col select-none overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
                 <button onClick={() => window.location.href = '/'} className="p-2 rounded-lg hover:bg-slate-800 transition">
                     <ArrowLeft size={18} />
@@ -170,7 +196,7 @@ export default function Chat() {
                 {user && <span className="ml-auto text-xs text-slate-400">{user}</span>}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                 {loading ? (
                     <p className="text-center text-slate-500 text-sm">Yükleniyor...</p>
                 ) : messages.length === 0 ? (
@@ -182,7 +208,7 @@ export default function Chat() {
                             className="flex flex-col gap-1"
                             onTouchStart={() => handleTouchStart(msg)}
                             onTouchEnd={handleTouchEnd}
-                            onMouseDown={() => handleTouchStart(msg)}
+                            onOriginalMouseDown={() => handleTouchStart(msg)}
                             onMouseUp={handleTouchEnd}
                         >
                             {msg.reply_to && (
