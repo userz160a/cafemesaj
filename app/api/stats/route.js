@@ -151,6 +151,33 @@ export async function POST(req) {
             return NextResponse.json({ success: true });
         }
 
+        if (action === 'saveAvatar') {
+            if (!sessionToken) return NextResponse.json({ success: false, message: 'Yetkisiz.' });
+            const now = new Date().toISOString();
+            const { data: session, error: sessionError } = await supabase
+                .from('sessions').select('nick').eq('token', sessionToken).gt('expires_at', now).single();
+            if (sessionError || !session) return NextResponse.json({ success: false, message: 'Gecersiz oturum.' });
+
+            const avatarUrl = body.avatarUrl || null;
+            const { data: allStats } = await supabase.from('stats').select('*');
+            const existingUser = allStats ? allStats.find(s => normalizeNick(s.nick) === normalizeNick(session.nick)) : null;
+            if (existingUser) {
+                await supabase.from('stats').update({ avatar_url: avatarUrl }).eq('id', existingUser.id);
+            }
+            return NextResponse.json({ success: true });
+        }
+
+        if (action === 'cleanInvalidNicks') {
+            const { data: allStats } = await supabase.from('stats').select('id, nick');
+            if (allStats) {
+                const invalid = allStats.filter(s => !s.nick || !/^[^\s].*#[0-9]{4}$/.test(s.nick.trim()));
+                for (const s of invalid) {
+                    await supabase.from('stats').delete().eq('id', s.id);
+                }
+            }
+            return NextResponse.json({ success: true });
+        }
+
         if (fullNick) {
             const { data: allStats } = await supabase.from('stats').select('*');
             const existingUser = allStats ? allStats.find(s => normalizeNick(s.nick) === normalizeNick(fullNick)) : null;
