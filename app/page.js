@@ -287,7 +287,6 @@ export default function Home() {
                 setData(prev => updateState(prev));
                 setStaticData(prev => updateState(prev));
                 setEditingAvatar(false);
-                fetchData(1, false);
             }
         } catch (err) { console.error(err); }
         setAvatarSaving(false);
@@ -438,12 +437,12 @@ export default function Home() {
 
                 {editingNote && (
                     <div className={`p-4 rounded-xl border max-w-md ${darkMode ? `${dm.card}` : 'bg-white border-slate-200 shadow-sm'}`}>
-                        <p className="text-xs font-medium mb-2">Notunuz (max 100 karakter, tek satır):</p>
+                        <p className="text-xs font-medium mb-2">Notunuz (max 200 karakter, tek satır):</p>
                         <div className="flex gap-2">
                             <input
                                 type="text"
                                 value={noteInput}
-                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 100))}
+                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 200))}
                                 placeholder="Notunuzu yazın..."
                                 className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
                                 autoFocus
@@ -455,7 +454,7 @@ export default function Home() {
                                 <X size={14} />
                             </button>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">{noteInput.length}/100</p>
+                        <p className="text-xs text-slate-400 mt-1">{noteInput.length}/200</p>
                     </div>
                 )}
 
@@ -595,7 +594,7 @@ export default function Home() {
                                                 <td className="p-4 font-semibold">
                                                     <div className="flex flex-col">
                                                         <span className={darkMode ? 'text-slate-200' : 'text-slate-900'}>{item.nick}</span>
-                                                        {item.note && <span className="text-xs text-slate-400 font-normal italic max-w-xs truncate">{item.note}</span>}
+                                                        {item.note && <span className={`text-xs font-bold mt-0.5 max-w-xs truncate ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>{item.note}</span>}
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-slate-400">{item.topics || 0}</td>
@@ -611,7 +610,7 @@ export default function Home() {
                     </div>
                     {hasMore && (
                         <div ref={bottomTriggerRef} className="p-4 text-center text-xs text-slate-500">
-                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için aşağı kaydırın'}
+                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için abajo kaydırın'}
                         </div>
                     )}
                 </div>
