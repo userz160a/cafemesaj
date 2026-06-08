@@ -248,27 +248,47 @@ export default function Home() {
     const saveNote = async () => {
         setNoteSaving(true);
         try {
-            await fetch('/api/stats', {
+            const res = await fetch('/api/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'saveNote', sessionToken, note: noteInput })
             });
-            setEditingNote(false);
-            fetchData(1, false);
+            if (res.ok) {
+                const updateState = (prevList) => prevList.map(item => 
+                    item.nick.toLowerCase() === user.toLowerCase() ? { ...item, note: noteInput } : item
+                );
+                setData(prev => updateState(prev));
+                setStaticData(prev => updateState(prev));
+                setEditingNote(false);
+                fetchData(1, false);
+            }
         } catch (err) { console.error(err); }
         setNoteSaving(false);
     };
 
     const saveAvatar = async () => {
+        if (!avatarInput.trim()) return;
         setAvatarSaving(true);
         try {
-            await fetch('/api/stats', {
+            const res = await fetch('/api/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'saveAvatar', sessionToken, avatarUrl: avatarInput })
+                body: JSON.stringify({ action: 'saveAvatar', sessionToken, avatarUrl: avatarInput.trim() })
             });
-            setEditingAvatar(false);
-            fetchData(1, false);
+            if (res.ok) {
+                setAvatarErrors(prev => {
+                    const next = { ...prev };
+                    delete next[user];
+                    return next;
+                });
+                const updateState = (prevList) => prevList.map(item => 
+                    item.nick.toLowerCase() === user.toLowerCase() ? { ...item, avatar_url: avatarInput.trim() } : item
+                );
+                setData(prev => updateState(prev));
+                setStaticData(prev => updateState(prev));
+                setEditingAvatar(false);
+                fetchData(1, false);
+            }
         } catch (err) { console.error(err); }
         setAvatarSaving(false);
     };
@@ -309,6 +329,7 @@ export default function Home() {
     const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
 
     const getAvatarSrc = (item) => {
+        if (item.avatar_url) return item.avatar_url;
         if (avatarErrors[item.nick]) {
             const baseNick = item.nick.split('#')[0].toLowerCase();
             return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
@@ -376,7 +397,7 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`}
+                                        src={currentUserData?.avatar_url || (currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`)}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
                                         onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
@@ -556,48 +577,43 @@ export default function Home() {
                                 ) : filteredData.length === 0 ? (
                                     <tr><td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td></tr>
                                 ) : (
-                                    filteredData.map((item) => {
+                                    filteredData.map((item, idx) => {
                                         if (!item || !item.nick) return null;
                                         return (
-                                            <React.Fragment key={item.nick}>
-                                                <tr className={`transition-colors ${getRowBg(item.originalIndex)}`}>
-                                                    <td className="p-4 text-center font-bold">
-                                                        {item.originalIndex === 0 ? '🥇' : item.originalIndex === 1 ? '🥈' : item.originalIndex === 2 ? '🥉' : item.originalIndex + 1}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <img
-                                                            src={getAvatarSrc(item)}
-                                                            alt={item.nick}
-                                                            className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                            onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
-                                                        />
-                                                    </td>
-                                                    <td className={`p-4 ${getRankColor(item.originalIndex)}`}>
-                                                        <div>{item.nick}</div>
-                                                        {item.note && (
-                                                            <div className={`text-[11px] mt-0.5 truncate max-w-[200px] ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.note}</div>
-                                                        )}
-                                                    </td>
-                                                    <td className={`p-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>{item.topics}</td>
-                                                    <td className={`p-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>{item.messages}</td>
-                                                    <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                                        {(item.messages || 0) + (item.topics || 0)}
-                                                    </td>
-                                                    <td className={`p-4 text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>
-                                                        {formatLastOnline(item.lastonlineostime)}
-                                                    </td>
-                                                </tr>
-                                            </React.Fragment>
+                                            <tr key={item.nick} className={`transition-colors ${getRowBg(item.originalIndex)}`}>
+                                                <td className={`p-4 text-center font-bold ${getRankColor(item.originalIndex)}`}>
+                                                    {item.originalIndex + 1}
+                                                </td>
+                                                <td className="p-4">
+                                                    <img
+                                                        src={getAvatarSrc(item)}
+                                                        alt={item.nick}
+                                                        className="w-8 h-8 rounded-lg object-cover bg-slate-700"
+                                                        onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                    />
+                                                </td>
+                                                <td className="p-4 font-semibold">
+                                                    <div className="flex flex-col">
+                                                        <span className={darkMode ? 'text-slate-200' : 'text-slate-900'}>{item.nick}</span>
+                                                        {item.note && <span className="text-xs text-slate-400 font-normal italic max-w-xs truncate">{item.note}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-slate-400">{item.topics || 0}</td>
+                                                <td className="p-4 text-slate-400">{item.messages || 0}</td>
+                                                <td className="p-4 font-bold text-amber-500">{(item.messages || 0) + (item.topics || 0)}</td>
+                                                <td className="p-4 text-xs text-slate-400">{formatLastOnline(item.last_online || item.updated_at)}</td>
+                                            </tr>
                                         );
                                     })
                                 )}
                             </tbody>
                         </table>
-                        {loadingMore && (
-                            <div className="p-4 text-center text-slate-500 text-sm">Yükleniyor...</div>
-                        )}
-                        <div ref={bottomTriggerRef} className="h-1" />
                     </div>
+                    {hasMore && (
+                        <div ref={bottomTriggerRef} className="p-4 text-center text-xs text-slate-500">
+                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için aşağı kaydırın'}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
