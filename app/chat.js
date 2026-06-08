@@ -38,7 +38,8 @@ export default function Chat() {
 
     const fetchMessages = async () => {
         try {
-            const res = await fetch(`/api/chat?user=${user ? encodeURIComponent(user) : ''}`);
+            const currentNick = user || localStorage.getItem('sessionNick') || '';
+            const res = await fetch(`/api/chat?user=${encodeURIComponent(currentNick)}`);
             if (res.ok) {
                 const data = await res.json();
                 setMessages(data);
@@ -92,7 +93,6 @@ export default function Chat() {
                 body: JSON.stringify({ sessionToken, content, replyTo: currentReply })
             });
             fetchMessages();
-            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
         } catch (err) {
             console.error(err);
         }
@@ -129,9 +129,9 @@ export default function Chat() {
             await fetch('/api/chat/hide', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionToken, messageId: msgId })
+                body: JSON.stringify({ sessionToken, messageId: msgId, user })
             });
-            setMessages(prev => prev.filter(m => m.id !== msgId));
+            fetchMessages();
         } catch (err) {
             console.error(err);
         }
