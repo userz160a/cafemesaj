@@ -1,10 +1,9 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X, Play, Pause } from 'lucide-react';
+import { Search, RefreshCw, MessageSquare, FileText, Users, Moon, Sun, LogOut, ChevronDown, MessageCircle, Edit3, Check, X, Play, Square } from 'lucide-react';
 
 export default function Home() {
     const [data, setData] = useState([]);
-    const [staticData, setStaticData] = useState([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -27,6 +26,7 @@ export default function Home() {
     const [noteSaving, setNoteSaving] = useState(false);
     const [isLoginNickValid, setIsLoginNickValid] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
+
     const menuRef = useRef(null);
     const observerRef = useRef(null);
     const bottomTriggerRef = useRef(null);
@@ -87,12 +87,12 @@ export default function Home() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const cleanInvalidNicks = async () => {
+    const deleteInvalidNick = async (nick) => {
         try {
             await fetch('/api/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'cleanInvalidNicks' })
+                body: JSON.stringify({ action: 'deleteInvalid', nick })
             });
         } catch (err) { console.error(err); }
     };
@@ -111,23 +111,28 @@ export default function Home() {
             if (res.ok) {
                 const json = await res.json();
                 if (json.data) {
-                    if (pageNum === 1) {
-                        await cleanInvalidNicks();
-                        const sorted = [...json.data].sort(
+                    const validData = [];
+                    for (const item of json.data) {
+                        if (item && item.nick) {
+                            if (!item.nick.includes('#')) {
+                                deleteInvalidNick(item.nick);
+                            } else {
+                                validData.push(item);
+                            }
+                        }
+                    }
+
+                    if (append) {
+                        setData(prev => {
+                            const combined = [...prev, ...validData];
+                            const unique = Array.from(new Map(combined.map(item => [item.nick, item])).values());
+                            return unique;
+                        });
+                    } else {
+                        const sorted = [...validData].sort(
                             (a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0))
                         );
                         setData(sorted);
-                        setStaticData(sorted);
-                    } else {
-                        if (append) {
-                            setData(prev => {
-                                const combined = [...prev, ...json.data];
-                                const unique = Array.from(new Map(combined.map(item => [item.nick, item])).values());
-                                const sortedUnique = unique.sort((a, b) => ((b.messages || 0) + (b.topics || 0)) - ((a.messages || 0) + (a.topics || 0)));
-                                setStaticData(sortedUnique);
-                                return sortedUnique;
-                            });
-                        }
                     }
                     setTotal(json.total || 0);
                     setHasMore((pageNum * 40) < (json.total || 0));
@@ -148,11 +153,13 @@ export default function Home() {
     }, [fetchData]);
 
     useEffect(() => {
-        if (!autoRefresh) return;
-        const interval = setInterval(() => {
-            fetchData(1, false);
-        }, 60000);
-        return () => clearInterval(interval);
+        let interval;
+        if (autoRefresh) {
+            interval = setInterval(() => {
+                fetchData(1, false);
+            }, 60000);
+        }
+        return () => { if (interval) clearInterval(interval); };
     }, [fetchData, autoRefresh]);
 
     useEffect(() => {
@@ -245,50 +252,38 @@ export default function Home() {
     const saveNote = async () => {
         setNoteSaving(true);
         try {
-            const res = await fetch('/api/stats', {
+            await fetch('/api/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'saveNote', sessionToken, note: noteInput })
             });
-            if (res.ok) {
-                const updateState = (prevList) => prevList.map(item => 
-                    item.nick.toLowerCase() === user.toLowerCase() ? { ...item, note: noteInput } : item
-                );
-                setData(prev => updateState(prev));
-                setStaticData(prev => updateState(prev));
-                setEditingNote(false);
-                fetchData(1, false);
-            }
+            setEditingNote(false);
+            fetchData(1, false);
         } catch (err) { console.error(err); }
         setNoteSaving(false);
     };
 
-    const formatLastOnline = (val) => {
-        if (!val) return '-';
+    const formatLastOnline = (timestamp) => {
+        if (!timestamp) return '-';
         try {
-            let d;
-            if (typeof val === 'string' && isNaN(val)) {
-                d = new Date(val);
-            } else {
-                const num = Number(val);
-                d = num > 100000000000 ? new Date(num) : new Date(num * 1000);
-            }
-            if (isNaN(d.getTime())) return '-';
-            return d.toLocaleString('tr-TR', {
+            return new Date(timestamp * 1000).toLocaleString('tr-TR', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit'
             });
         } catch (e) { return '-'; }
     };
 
-    const searchFilteredData = (staticData || []).map((item, index) => ({ ...item, originalIndex: index }));
+    const mappedDataWithIndex = (data || []).map((item, originalIndex) => ({
+        ...item,
+        originalIndex
+    }));
 
-    const filteredData = searchFilteredData.filter(item =>
+    const filteredData = mappedDataWithIndex.filter(item =>
         item && item.nick && item.nick.toLowerCase().includes((search || '').toLowerCase())
     );
 
-    const totalMessages = (staticData || []).reduce((sum, item) => sum + (Number(item?.messages) || 0), 0);
-    const totalTopics = (staticData || []).reduce((sum, item) => sum + (Number(item?.topics) || 0), 0);
+    const totalMessages = (data || []).reduce((sum, item) => sum + (Number(item?.messages) || 0), 0);
+    const totalTopics = (data || []).reduce((sum, item) => sum + (Number(item?.topics) || 0), 0);
 
     const getRankColor = (index) => {
         if (index === 0) return darkMode ? 'text-amber-400 font-bold' : 'text-amber-600 font-bold';
@@ -304,14 +299,7 @@ export default function Home() {
         return darkMode ? 'hover:bg-slate-800/60' : 'hover:bg-slate-100/70';
     };
 
-    const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
-
-    const getAvatarSrc = (item) => {
-        if (item.avatar_url) return item.avatar_url;
-        const cleanNick = (item.nick || '').split('#')[0];
-        const upperPrefix = cleanNick.substring(0, 3).toUpperCase();
-        return `/api/avatar?name=${encodeURIComponent(upperPrefix)}`;
-    };
+    const currentUserData = user ? (data || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
 
     const dm = {
         bg: 'bg-[#0a0c10]',
@@ -343,12 +331,6 @@ export default function Home() {
                             </div>
                         </button>
                         <button
-                            onClick={() => setAutoRefresh(!autoRefresh)}
-                            className={`p-2 rounded-lg border transition text-white ${autoRefresh ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-500' : 'bg-rose-600 hover:bg-rose-700 border-rose-500'}`}
-                        >
-                            {autoRefresh ? <Play size={16} /> : <Pause size={16} />}
-                        </button>
-                        <button
                             onClick={() => window.open('/chat', '_blank')}
                             className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
                         >
@@ -359,6 +341,12 @@ export default function Home() {
                             className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
                         >
                             <RefreshCw size={16} />
+                        </button>
+                        <button
+                            onClick={() => setAutoRefresh(!autoRefresh)}
+                            className={`p-2 rounded-lg border transition flex items-center justify-center ${autoRefresh ? 'bg-green-600 border-green-700 text-white hover:bg-green-700' : 'bg-red-600 border-red-700 text-white hover:bg-red-700'}`}
+                        >
+                            {autoRefresh ? <Play size={16} /> : <Square size={16} />}
                         </button>
                         {!user ? (
                             !showLoginForm ? (
@@ -373,10 +361,10 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`)}
+                                        src={`/api/avatar?name=${encodeURIComponent(user)}`}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
-                                        onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
+                                        onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }}
                                     />
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
@@ -407,12 +395,12 @@ export default function Home() {
 
                 {editingNote && (
                     <div className={`p-4 rounded-xl border max-w-md ${darkMode ? `${dm.card}` : 'bg-white border-slate-200 shadow-sm'}`}>
-                        <p className="text-xs font-medium mb-2">Notunuz (max 200 karakter, tek satır):</p>
+                        <p className="text-xs font-medium mb-2">Notunuz (max 100 karakter, tek satır):</p>
                         <div className="flex gap-2">
                             <input
                                 type="text"
                                 value={noteInput}
-                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 200))}
+                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 100))}
                                 placeholder="Notunuzu yazın..."
                                 className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
                                 autoFocus
@@ -424,7 +412,7 @@ export default function Home() {
                                 <X size={14} />
                             </button>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">{noteInput.length}/200</p>
+                        <p className="text-xs text-slate-400 mt-1">{noteInput.length}/100</p>
                     </div>
                 )}
 
@@ -524,43 +512,55 @@ export default function Home() {
                                 ) : filteredData.length === 0 ? (
                                     <tr><td colSpan={7} className="p-8 text-center text-slate-400">Veri bulunamadı.</td></tr>
                                 ) : (
-                                    filteredData.map((item, idx) => {
+                                    filteredData.map((item) => {
                                         if (!item || !item.nick) return null;
+                                        const index = item.originalIndex;
                                         return (
-                                            <tr key={item.nick} className={`transition-colors ${getRowBg(item.originalIndex)}`}>
-                                                <td className={`p-4 text-center font-bold ${getRankColor(item.originalIndex)}`}>
-                                                    {item.originalIndex + 1}
-                                                </td>
-                                                <td className="p-4">
-                                                    <img
-                                                        src={getAvatarSrc(item)}
-                                                        alt={item.nick}
-                                                        className="w-8 h-8 rounded-lg object-cover bg-slate-700"
-                                                        onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
-                                                    />
-                                                </td>
-                                                <td className="p-4 font-semibold">
-                                                    <div className="flex flex-col">
-                                                        <span className={darkMode ? 'text-slate-200' : 'text-slate-900'}>{item.nick}</span>
-                                                        {item.note && <span className={`text-xs font-bold mt-0.5 max-w-xs truncate ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>{item.note}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-slate-400">{item.topics || 0}</td>
-                                                <td className="p-4 text-slate-400">{item.messages || 0}</td>
-                                                <td className="p-4 font-bold text-amber-500">{(item.messages || 0) + (item.topics || 0)}</td>
-                                                <td className="p-4 text-xs text-slate-400">{formatLastOnline(item.last_online || item.updated_at)}</td>
-                                            </tr>
+                                            <React.Fragment key={item.nick}>
+                                                <tr className={`transition-colors ${getRowBg(index)}`}>
+                                                    <td className="p-4 text-center font-bold">
+                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        {!avatarErrors[item.nick] ? (
+                                                            <img
+                                                                src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
+                                                                alt={item.nick}
+                                                                className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
+                                                                onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                            />
+                                                        ) : (
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-[#1a1d27] text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                                                                {item.nick.substring(0, 3).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`p-4 ${getRankColor(index)}`}>
+                                                        <div>{item.nick}</div>
+                                                        {item.note && (
+                                                            <div className={`text-[11px] mt-0.5 truncate max-w-[200px] ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.note}</div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`p-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>{item.topics}</td>
+                                                    <td className={`p-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>{item.messages}</td>
+                                                    <td className={`p-4 font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                        {(item.messages || 0) + (item.topics || 0)}
+                                                    </td>
+                                                    <td className={`p-4 text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                                                        {formatLastOnline(item.lastonlineostime)}
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
                                         );
                                     })
                                 )}
                             </tbody>
                         </table>
+                        {loadingMore && (
+                            <div className="p-4 text-center text-slate-500 text-sm">Yükleniyor...</div>
+                        )}
+                        <div ref={bottomTriggerRef} className="h-1" />
                     </div>
-                    {hasMore && (
-                        <div ref={bottomTriggerRef} className="p-4 text-center text-xs text-slate-500">
-                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için aşağı kaydırın'}
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
