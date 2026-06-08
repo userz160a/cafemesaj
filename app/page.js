@@ -260,7 +260,9 @@ export default function Home() {
                 setData(prev => updateState(prev));
                 setStaticData(prev => updateState(prev));
                 setEditingNote(false);
-                fetchData(1, false);
+                setTimeout(() => {
+                    fetchData(1, false);
+                }, 300);
             }
         } catch (err) { console.error(err); }
         setNoteSaving(false);
@@ -287,15 +289,26 @@ export default function Home() {
                 setData(prev => updateState(prev));
                 setStaticData(prev => updateState(prev));
                 setEditingAvatar(false);
+                setTimeout(() => {
+                    fetchData(1, false);
+                }, 300);
             }
         } catch (err) { console.error(err); }
         setAvatarSaving(false);
     };
 
-    const formatLastOnline = (timestamp) => {
-        if (!timestamp) return '-';
+    const formatLastOnline = (val) => {
+        if (!val) return '-';
         try {
-            return new Date(timestamp * 1000).toLocaleString('tr-TR', {
+            let d;
+            if (typeof val === 'string' && isNaN(val)) {
+                d = new Date(val);
+            } else {
+                const num = Number(val);
+                d = num > 100000000000 ? new Date(num) : new Date(num * 1000);
+            }
+            if (isNaN(d.getTime())) return '-';
+            return d.toLocaleString('tr-TR', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit'
             });
@@ -329,11 +342,12 @@ export default function Home() {
 
     const getAvatarSrc = (item) => {
         if (item.avatar_url) return item.avatar_url;
+        const cleanNick = (item.nick || '').split('#')[0];
+        const upperPrefix = cleanNick.substring(0, 3).toUpperCase();
         if (avatarErrors[item.nick]) {
-            const baseNick = item.nick.split('#')[0].toLowerCase();
-            return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+            return `/api/avatar?name=${encodeURIComponent(upperPrefix)}`;
         }
-        return item.avatar_url || `/api/avatar?name=${encodeURIComponent(item.nick)}`;
+        return `/api/avatar?name=${encodeURIComponent(upperPrefix)}`;
     };
 
     const dm = {
@@ -610,7 +624,7 @@ export default function Home() {
                     </div>
                     {hasMore && (
                         <div ref={bottomTriggerRef} className="p-4 text-center text-xs text-slate-500">
-                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için abajo kaydırın'}
+                            {loadingMore ? 'Daha fazla yükleniyor...' : 'Daha fazlasını görmek için aşağı kaydırın'}
                         </div>
                     )}
                 </div>
