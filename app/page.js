@@ -283,6 +283,34 @@ export default function Home() {
         } catch (e) { return '-'; }
     };
 
+    const getAvatarSrc = (item) => {
+        const baseNick = item.nick.split('#')[0].toLowerCase();
+        const atelierUrl = `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
+
+        if (avatarErrors[item.nick] === 'all') {
+            return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' rx='8' fill='%23334155'/%3E%3C/svg%3E`;
+        }
+
+        if (avatarErrors[item.nick] === 'custom') {
+            return atelierUrl;
+        }
+
+        if (item.avatar_url && item.avatar_url.trim() !== '') {
+            return item.avatar_url;
+        }
+
+        return atelierUrl;
+    };
+
+    const handleAvatarError = (nick, item) => {
+        const hasCustom = item.avatar_url && item.avatar_url.trim() !== '';
+        if (hasCustom && avatarErrors[nick] !== 'custom') {
+            setAvatarErrors(prev => ({ ...prev, [nick]: 'custom' }));
+        } else {
+            setAvatarErrors(prev => ({ ...prev, [nick]: 'all' }));
+        }
+    };
+
     const searchFilteredData = (staticData || []).map((item, index) => ({ ...item, originalIndex: index }));
 
     const filteredData = searchFilteredData.filter(item =>
@@ -307,14 +335,6 @@ export default function Home() {
     };
 
     const currentUserData = user ? (staticData || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
-
-    const getAvatarSrc = (item) => {
-        if (avatarErrors[item.nick]) {
-            const baseNick = item.nick.split('#')[0].toLowerCase();
-            return `https://mice.atelier801.com/img/avatar/${baseNick}.png`;
-        }
-        return item.avatar_url || `/api/avatar?name=${encodeURIComponent(item.nick)}`;
-    };
 
     const dm = {
         bg: 'bg-[#0a0c10]',
@@ -376,10 +396,10 @@ export default function Home() {
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
                                 >
                                     <img
-                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>`}
+                                        src={currentUserData ? getAvatarSrc(currentUserData) : `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='6' fill='%23334155'/%3E%3C/svg%3E`}
                                         alt={user}
                                         className="w-6 h-6 rounded-md object-cover"
-                                        onError={() => setAvatarErrors(prev => ({ ...prev, [user]: true }))}
+                                        onError={() => currentUserData && handleAvatarError(user, currentUserData)}
                                     />
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
@@ -569,7 +589,7 @@ export default function Home() {
                                                             src={getAvatarSrc(item)}
                                                             alt={item.nick}
                                                             className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                            onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
+                                                            onError={() => handleAvatarError(item.nick, item)}
                                                         />
                                                     </td>
                                                     <td className={`p-4 ${getRankColor(item.originalIndex)}`}>
