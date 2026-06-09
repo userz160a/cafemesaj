@@ -3,22 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Veri Yükle</title>
+<title>Ucube Veri Yükleyici PRO</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0a0c10; color: #e2e8f0; font-family: sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .card { background: #0f1117; border: 1px solid #1e2130; border-radius: 16px; padding: 28px; width: 100%; max-width: 600px; }
-  h1 { font-size: 20px; font-weight: 800; background: linear-gradient(to right, #f97316, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
-  textarea { width: 100%; height: 320px; background: #141720; border: 1px solid #1e2130; border-radius: 10px; color: #e2e8f0; font-size: 13px; padding: 12px; resize: vertical; outline: none; font-family: monospace; }
+  .card { background: #0f1117; border: 1px solid #1e2130; border-radius: 16px; padding: 28px; width: 100%; max-width: 650px; }
+  h1 { font-size: 22px; font-weight: 800; background: linear-gradient(to right, #f97316, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; text-align: center; }
+  textarea { width: 100%; height: 350px; background: #141720; border: 1px solid #1e2130; border-radius: 10px; color: #e2e8f0; font-size: 13px; padding: 12px; resize: vertical; outline: none; font-family: monospace; }
   textarea:focus { border-color: #f97316; }
   .btns { display: flex; gap: 10px; margin-top: 14px; }
-  button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+  button { flex: 1; padding: 14px; border-radius: 10px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #btnRun { background: linear-gradient(to right, #f97316, #white; color: white; }
-  #btnClear { background: #1e2130; color: #94a3b8; flex: 0.4; }
-  #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; white-space: pre-line; }
+  #btnRun { background: linear-gradient(to right, #f97316, #b45309); color: white; }
+  #btnClear { background: #1e2130; color: #94a3b8; flex: 0.3; }
+  #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; white-space: pre-line; line-height: 1.5; }
   .ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
   .err { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
   .loading { background: #1e2130; color: #94a3b8; border: 1px solid #2d3748; }
@@ -26,10 +26,10 @@
 </head>
 <body>
 <div class="card">
-  <h1>📋 Veri Yükle</h1>
-  <textarea id="txt" placeholder="ucube.cafe → Ctrl+A → Ctrl+C → buraya Ctrl+V"></textarea>
+  <h1>📋 Cafe Rank Veri Otomasyonu</h1>
+  <textarea id="txt" placeholder="Sitedeki tüm metni (Ctrl+A -> Ctrl+C) kopyalayıp buraya yapıştırın..."></textarea>
   <div class="btns">
-    <button id="btnRun" onclick="run()">▶ Güncelle</button>
+    <button id="btnRun" onclick="run()">▶ Verileri Analiz Et & Güncelle</button>
     <button id="btnClear" onclick="document.getElementById('txt').value='';setStatus('')">Temizle</button>
   </div>
   <div id="status"></div>
@@ -58,35 +58,22 @@ function parseAndDeduplicate(text) {
 
   const blacklistMatches = blacklistContent.match(/[^\s]+#[0-9]{4}/g);
   if (blacklistMatches) {
-    blacklistMatches.forEach(n => {
-      let bNick = n.trim().replace(/^(.*?)([^\s]+#[0-9]{4})$/, '$2');
-      blacklistSet.add(bNick);
-    });
+    blacklistMatches.forEach(n => blacklistSet.add(n.trim()));
   }
 
-  const regex = /([^\s]+#[0-9]{4})\s+([\d.]+)\s*(\d+)\s*(\d{2}\/\d{2}\s+\d{2}:\d{2}|-|(?:\d{2}\/\d{2}))/g;
+  const regex = /([^\s]+#[0-9]{4})(?:\s+[^\s]+#[0-9]{4})?\s+([\d.]+)\s+(\d+)\s+(\d{2}\/\d{2}\s+\d{2}:\d{2}|-)/g;
   let match;
 
   while ((match = regex.exec(mainContent)) !== null) {
-    let rawNick = match[1].trim();
-    
-    let cleanNick = rawNick.replace(/^(?:Görülme|Level|lvl|\d+)*([^\s]+#[0-9]{4})$/i, '$1');
-    cleanNick = cleanNick.replace(/^[^a-zA-Z0-9_ğüşöçİĞÜŞÖÇ]+/, '');
+    const cleanNick = match[1].trim();
 
     if (cleanNick.endsWith('#0000') || blacklistSet.has(cleanNick) || !cleanNick.includes('#')) {
       continue;
     }
 
-    let messages = parseInt(match[2].replace(/\./g, ''), 10);
-    let topics = parseInt(match[3], 10);
+    const messages = parseInt(match[2].replace(/\./g, ''), 10);
+    const topics = parseInt(match[3], 10);
     const last_message = match[4].trim();
-
-    if (messages > 10000) {
-      const msgStr = match[2].replace(/\./g, '');
-      if (msgStr.length >= 5) {
-        messages = parseInt(msgStr.substring(0, msgStr.length - 3), 10);
-      }
-    }
 
     if (!isNaN(messages) && !isNaN(topics)) {
       userMap.set(cleanNick, { nick: cleanNick, messages, topics, last_message });
@@ -98,19 +85,19 @@ function parseAndDeduplicate(text) {
 
 async function run() {
   const text = document.getElementById('txt').value.trim();
-  if (!text) return setStatus('Metin boş!', 'err');
+  if (!text) return setStatus('Metin alanı boş bırakılamaz!', 'err');
   
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
-  setStatus('Veriler ayıklanıyor...', 'loading');
+  setStatus('Kopyalanan metin analiz ediliyor, ucube filtreleri devrede...', 'loading');
 
   try {
     const currentCleanData = parseAndDeduplicate(text);
     if (currentCleanData.length === 0) {
-      throw new Error('Metinden geçerli bir kullanıcı ayırt edilemedi.');
+      throw new Error('Metinden geçerli bir kullanıcı verisi veya istatistik ayırt edilemedi. Formatı kontrol edin.');
     }
 
-    setStatus('Eski ucube verileri veritabanından alınıyor...', 'loading');
+    setStatus('Bir önceki yüklemenin geçmiş verileri (ucube_history) çekiliyor...', 'loading');
     const { data: historyData, error: historyError } = await _supabase
       .from('ucube_history')
       .select('raw_text')
@@ -128,8 +115,9 @@ async function run() {
       });
     }
 
-    setStatus('Supabase canlı verileri kontrol ediliyor...', 'loading');
+    setStatus('Mevcut Supabase canlı veritabanı kayıtları sorgulanıyor...', 'loading');
     const nicks = currentCleanData.map(u => u.nick);
+    
     const { data: supabaseUsers, error: fetchError } = await _supabase
       .from('stats')
       .select('id, nick, messages, topics, last_message')
@@ -185,22 +173,22 @@ async function run() {
     });
 
     if (finalUpsertList.length > 0) {
-      setStatus('Hesaplanan farklar Supabase\'e aktarılıyor...', 'loading');
+      setStatus('Hesaplanan net farklar veritabanına (stats) işleniyor...', 'loading');
       const { error: upsertError } = await _supabase.from('stats').upsert(finalUpsertList);
       if (upsertError) throw upsertError;
     }
 
-    setStatus('Mevcut metin sonraki işlem için kaydediliyor...', 'loading');
+    setStatus('Bu veri seti bir sonraki kıyaslama için ucube_history tablosuna kaydediliyor...', 'loading');
     const { error: saveError } = await _supabase
       .from('ucube_history')
       .upsert({ id: 1, raw_text: text, updated_at: new Date().toISOString() });
 
     if (saveError) throw saveError;
 
-    setStatus(`✅ İşlem Tamamlandı!\n\nTemizlenmiş veriler başarıyla kıyaslandı ve kaydedildi.\nSayıları artış gösteren oyuncu sayısı: ${updatedCount}`, 'ok');
+    setStatus(`✅ Kusursuz Şekilde Tamamlandı!\n\nNoktalı büyük sayılar ve ucube çift isim satırları başarıyla temizlendi.\nAktif olarak istatistiği artan/güncellenen oyuncu sayısı: ${updatedCount}`, 'ok');
 
   } catch (e) { 
-    setStatus('❌ Hata:\n' + e.message, 'err'); 
+    setStatus('❌ Hata Meydana Geldi:\n' + e.message, 'err'); 
     console.error(e);
   } finally {
     btn.disabled = false;
