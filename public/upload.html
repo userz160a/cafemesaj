@@ -18,7 +18,7 @@
   button:disabled { opacity: 0.4; cursor: not-allowed; }
   #btnRun { background: linear-gradient(to right, #f97316, #f59e0b); color: white; }
   #btnClear { background: #1e2130; color: #94a3b8; flex: 0.4; }
-  #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; }
+  #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; white-space: pre-line; }
   .ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
   .err { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
   .loading { background: #1e2130; color: #94a3b8; border: 1px solid #2d3748; }
@@ -36,9 +36,9 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT_URL.supabase.co';
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseUrl = 'https://hcxwjnkywsfwviexjopt.supabase.co';
+const supabaseKey = 'sb_publishable_ZJFVMWFEHL32yXZXzqT4ZQ_3fNbZTO-';
+const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
 function setStatus(msg, type) {
   const el = document.getElementById('status');
@@ -49,35 +49,80 @@ function setStatus(msg, type) {
 }
 
 function parseAndDeduplicate(text) {
-  const lowerText = text.toLowerCase();
-  const blacklistIndex = lowerText.indexOf("blacklist");
-  let mainText = text;
-  let blacklistSet = new Set();
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const userMap = new Map();
+  const blacklistSet = new Set();
+  
+  let inBlacklistSection = false;
 
-  if (blacklistIndex !== -1) {
-    mainText = text.substring(0, blacklistIndex);
-    const blacklistSection = text.substring(blacklistIndex);
-    const blacklistMatches = blacklistSection.match(/([a-zA-Z0-9_\-\.\s]+#[0-9]{4})/g);
-    if (blacklistMatches) {
-      blacklistMatches.forEach(tag => blacklistSet.add(tag.trim()));
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.toLowerCase().includes('blacklist')) {
+      inBlacklistSection = true;
+      continue;
+    }
+
+    const nickMatch = line.match(/^([^\s]+#[0-9]{4})$/);
+
+    if (inBlacklistSection) {
+      if (nickMatch) {
+        blacklistSet.add(nickMatch[1]);
+      }
+      continue;
+    }
+
+    if (nickMatch) {
+      const username = nickMatch[1];
+      
+      let dataLine = "";
+      let searchIdx = i + 1;
+      
+      while (searchIdx < lines.length) {
+        const nextLine = lines[searchIdx];
+        
+        if (nextLine.toLowerCase().includes('blacklist')) {
+          break;
+        }
+        if (nextLine === username) {
+          searchIdx++;
+          continue;
+        }
+        if (nextLine.match(/^[0-9]+$/)) {
+          searchIdx++;
+          continue;
+        }
+        if (nextLine.match(/\d{2}\/\d{2}/) || nextLine.includes('lvl')) {
+          dataLine = nextLine;
+          break;
+        }
+        if (nextLine.match(/[^\s]+#[0-9]{4}/)) {
+          break;
+        }
+        
+        dataLine += " " + nextLine;
+        searchIdx++;
+      }
+
+      if (dataLine) {
+        const parts = dataLine.trim().split(/\s+/);
+        if (parts.length >= 5) {
+          const mesaj = parseInt(parts[0].replace(/\./g, ''), 10);
+          const konu = parseInt(parts[1], 10);
+          const son_gorulme = parts[2] + " " + parts[3];
+          const level = parts[4] + (parts[5] ? " " + parts[5] : "");
+
+          if (!isNaN(mesaj) && !isNaN(konu)) {
+            userMap.set(username, { username, mesaj, konu, son_gorulme, level });
+          }
+        }
+      }
     }
   }
 
-  const regex = /([a-zA-Z0-9_\-\.\s]+#[0-9]{4})\s+\1\s+([\d\.]+)\s+(\d+)\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})\s+(lvl\s+\d+)/g;
-  const userMap = new Map();
-  let match;
-
-  while ((match = regex.exec(mainText)) !== null) {
-    const username = match[1].trim();
-    if (blacklistSet.has(username)) continue;
-
-    const mesaj = parseInt(match[2].replace(/\./g, ''), 10);
-    const konu = parseInt(match[3], 10);
-    const son_gorulme = match[4];
-    const level = match[5];
-
-    userMap.set(username, { username, mesaj, konu, son_gorulme, level });
-  }
+  blacklistSet.forEach(badUser => {
+    userMap.delete(badUser);
+  });
 
   return Array.from(userMap.values());
 }
@@ -88,16 +133,18 @@ async function run() {
   
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
-  setStatus('İşlem yapılıyor...', 'loading');
+  setStatus('Veriler ayıklanıyor...', 'loading');
 
   try {
     const cleanData = parseAndDeduplicate(text);
     if (cleanData.length === 0) {
-      throw new Error('Listeden eklenecek geçerli oyuncu bulunamadı.');
+      throw new Error('Metinden hiçbir geçerli oyuncu ayırt edilemedi.');
     }
 
+    setStatus(`Veritabanı kontrol ediliyor... (${cleanData.length} oyuncu)`, 'loading');
+
     const usernames = cleanData.map(u => u.username);
-    const { data: existingUsers, error: fetchError } = await supabase
+    const { data: existingUsers, error: fetchError } = await _supabase
       .from('oyuncular')
       .select('username, mesaj, konu, level')
       .in('username', usernames);
@@ -111,27 +158,29 @@ async function run() {
 
     const finalUpsertList = cleanData.filter(user => {
       const existing = existingMap.get(user.username);
-      if (!existing) return true;
+      if (!existing) return true; 
       return existing.mesaj !== user.mesaj || existing.konu !== user.konu || existing.level !== user.level;
     });
 
     if (finalUpsertList.length === 0) {
-      setStatus('✅ Herhangi bir veri değişmediği için işlem yapılmadı.', 'ok');
+      setStatus('✅ Sayıları değişen kimse yok. Tüm veriler zaten güncel.', 'ok');
       btn.disabled = false;
       return;
     }
 
-    const { error: upsertError } = await supabase
+    setStatus(`${finalUpsertList.length} oyuncunun verisi güncelleniyor...`, 'loading');
+
+    const { error: upsertError } = await _supabase
       .from('oyuncular')
       .upsert(finalUpsertList, { onConflict: 'username' });
 
     if (upsertError) throw upsertError;
 
-    setStatus(`✅ İşlem Tamam! ${finalUpsertList.length} oyuncunun verisi güncellendi / kaydedildi.`, 'ok');
+    setStatus(`✅ Başarılı!\nTaranan benzersiz oyuncu: ${cleanData.length}\nSayıları değişen ve güncellenen: ${finalUpsertList.length}`, 'ok');
   } catch (e) { 
-    setStatus('❌ Hata: ' + e.message, 'err'); 
+    setStatus('❌ Hata:\n' + e.message, 'err'); 
     console.error(e);
-  } finally {
+  } finaly {
     btn.disabled = false;
   }
 }
