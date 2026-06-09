@@ -101,15 +101,15 @@ async function run() {
     const { data: historyData, error: historyError } = await _supabase
       .from('ucube_history')
       .select('raw_text')
-      .eq('id', 1)
-      .single();
+      .order('id', { ascending: false })
+      .limit(1);
 
     const oldUcubeMap = {};
     let hasHistory = false;
 
-    if (!historyError && historyData && historyData.raw_text) {
+    if (!historyError && historyData && historyData.length > 0 && historyData[0].raw_text) {
       hasHistory = true;
-      const parsedOldData = parseAndDeduplicate(historyData.raw_text);
+      const parsedOldData = parseAndDeduplicate(historyData[0].raw_text);
       parsedOldData.forEach(u => {
         oldUcubeMap[u.nick] = { messages: u.messages, topics: u.topics };
       });
@@ -181,7 +181,7 @@ async function run() {
     setStatus('Bu veri seti bir sonraki kıyaslama için ucube_history tablosuna kaydediliyor...', 'loading');
     const { error: saveError } = await _supabase
       .from('ucube_history')
-      .upsert({ id: 1, raw_text: text, updated_at: new Date().toISOString() });
+      .insert({ raw_text: text, updated_at: new Date().toISOString() });
 
     if (saveError) throw saveError;
 
