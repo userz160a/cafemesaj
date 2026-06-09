@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Veri Yükle</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0a0c10; color: #e2e8f0; font-family: sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -33,7 +34,12 @@
   </div>
   <div id="status"></div>
 </div>
+
 <script>
+const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT_URL.supabase.co';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 function setStatus(msg, type) {
   const el = document.getElementById('status');
   if (!msg) { el.style.display = 'none'; return; }
@@ -41,19 +47,93 @@ function setStatus(msg, type) {
   el.textContent = msg;
   el.style.display = 'block';
 }
+
+function parseAndDeduplicate(text) {
+  const lowerText = text.toLowerCase();
+  const blacklistIndex = lowerText.indexOf("blacklist");
+  let mainText = text;
+  let blacklistSet = new Set();
+
+  if (blacklistIndex !== -1) {
+    mainText = text.substring(0, blacklistIndex);
+    const blacklistSection = text.substring(blacklistIndex);
+    const blacklistMatches = blacklistSection.match(/([a-zA-Z0-9_\-\.\s]+#[0-9]{4})/g);
+    if (blacklistMatches) {
+      blacklistMatches.forEach(tag => blacklistSet.add(tag.trim()));
+    }
+  }
+
+  const regex = /([a-zA-Z0-9_\-\.\s]+#[0-9]{4})\s+\1\s+([\d\.]+)\s+(\d+)\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})\s+(lvl\s+\d+)/g;
+  const userMap = new Map();
+  let match;
+
+  while ((match = regex.exec(mainText)) !== null) {
+    const username = match[1].trim();
+    if (blacklistSet.has(username)) continue;
+
+    const mesaj = parseInt(match[2].replace(/\./g, ''), 10);
+    const konu = parseInt(match[3], 10);
+    const son_gorulme = match[4];
+    const level = match[5];
+
+    userMap.set(username, { username, mesaj, konu, son_gorulme, level });
+  }
+
+  return Array.from(userMap.values());
+}
+
 async function run() {
   const text = document.getElementById('txt').value.trim();
   if (!text) return setStatus('Metin boş!', 'err');
+  
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
-  setStatus('Güncelleniyor...', 'loading');
+  setStatus('İşlem yapılıyor...', 'loading');
+
   try {
-    const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-    const j = await r.json();
-    if (j.ok) setStatus('✅ Tamam! ' + j.parsed + ' kişi parse edildi, ' + j.updated + ' güncellendi.', 'ok');
-    else setStatus('❌ ' + (j.error || 'Hata'), 'err');
-  } catch (e) { setStatus('❌ ' + e.message, 'err'); }
-  btn.disabled = false;
+    const cleanData = parseAndDeduplicate(text);
+    if (cleanData.length === 0) {
+      throw new Error('Listeden eklenecek geçerli oyuncu bulunamadı.');
+    }
+
+    const usernames = cleanData.map(u => u.username);
+    const { data: existingUsers, error: fetchError } = await supabase
+      .from('oyuncular')
+      .select('username, mesaj, konu, level')
+      .in('username', usernames);
+
+    if (fetchError) throw fetchError;
+
+    const existingMap = new Map();
+    if (existingUsers) {
+      existingUsers.forEach(u => existingMap.set(u.username, u));
+    }
+
+    const finalUpsertList = cleanData.filter(user => {
+      const existing = existingMap.get(user.username);
+      if (!existing) return true;
+      return existing.mesaj !== user.mesaj || existing.konu !== user.konu || existing.level !== user.level;
+    });
+
+    if (finalUpsertList.length === 0) {
+      setStatus('✅ Herhangi bir veri değişmediği için işlem yapılmadı.', 'ok');
+      btn.disabled = false;
+      return;
+    }
+
+    const { error: upsertError } = await supabase
+      .from('oyuncular')
+      .upsert(finalUpsertList, { onConflict: 'username' });
+
+    if (upsertError) throw upsertError;
+
+    setStatus(`✅ İşlem Tamam! ${finalUpsertList.length} oyuncunun verisi güncellendi / kaydedildi.`, 'ok');
+  } catch (e) { 
+    setStatus('❌ Hata: ' + e.message, 'err'); 
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
 }
 </script>
 </body>
