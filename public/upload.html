@@ -16,7 +16,7 @@
   button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #btnRun { background: linear-gradient(to right, #f97316, #f59e0b); color: white; }
+  #btnRun { background: linear-gradient(to right, #f97316, #white; color: white; }
   #btnClear { background: #1e2130; color: #94a3b8; flex: 0.4; }
   #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; white-space: pre-line; }
   .ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
@@ -58,25 +58,38 @@ function parseAndDeduplicate(text) {
 
   const blacklistMatches = blacklistContent.match(/[^\s]+#[0-9]{4}/g);
   if (blacklistMatches) {
-    blacklistMatches.forEach(nick => blacklistSet.add(nick.trim()));
+    blacklistMatches.forEach(n => {
+      let bNick = n.trim().replace(/^(.*?)([^\s]+#[0-9]{4})$/, '$2');
+      blacklistSet.add(bNick);
+    });
   }
 
-  const regex = /([^\s]+#[0-9]{4})\s*([\d.]+)\s*(\d+)\s*(\d{2}\/\d{2}\s+\d{2}:\d{2}|-|(?:\d{2}\/\d{2}))/g;
+  const regex = /([^\s]+#[0-9]{4})\s+([\d.]+)\s*(\d+)\s*(\d{2}\/\d{2}\s+\d{2}:\d{2}|-|(?:\d{2}\/\d{2}))/g;
   let match;
 
   while ((match = regex.exec(mainContent)) !== null) {
-    const nick = match[1].trim();
+    let rawNick = match[1].trim();
     
-    if (nick.endsWith('#0000') || blacklistSet.has(nick)) {
+    let cleanNick = rawNick.replace(/^(?:Görülme|Level|lvl|\d+)*([^\s]+#[0-9]{4})$/i, '$1');
+    cleanNick = cleanNick.replace(/^[^a-zA-Z0-9_ğüşöçİĞÜŞÖÇ]+/, '');
+
+    if (cleanNick.endsWith('#0000') || blacklistSet.has(cleanNick) || !cleanNick.includes('#')) {
       continue;
     }
 
-    const messages = parseInt(match[2].replace(/\./g, ''), 10);
-    const topics = parseInt(match[3], 10);
+    let messages = parseInt(match[2].replace(/\./g, ''), 10);
+    let topics = parseInt(match[3], 10);
     const last_message = match[4].trim();
 
+    if (messages > 10000) {
+      const msgStr = match[2].replace(/\./g, '');
+      if (msgStr.length >= 5) {
+        messages = parseInt(msgStr.substring(0, msgStr.length - 3), 10);
+      }
+    }
+
     if (!isNaN(messages) && !isNaN(topics)) {
-      userMap.set(nick, { nick, messages, topics, last_message });
+      userMap.set(cleanNick, { nick: cleanNick, messages, topics, last_message });
     }
   }
 
@@ -94,7 +107,7 @@ async function run() {
   try {
     const currentCleanData = parseAndDeduplicate(text);
     if (currentCleanData.length === 0) {
-      throw new Error('Metinden geçerli bir kullanıcı (# içeren) ayırt edilemedi. Lütfen tüm listeyi doğru kopyaladığınızdan emin olun.');
+      throw new Error('Metinden geçerli bir kullanıcı ayırt edilemedi.');
     }
 
     setStatus('Eski ucube verileri veritabanından alınıyor...', 'loading');
@@ -184,7 +197,7 @@ async function run() {
 
     if (saveError) throw saveError;
 
-    setStatus(`✅ İşlem Tamamlandı!\n\nBir önceki ucube verisi ile kıyaslandı.\nSayıları artış gösteren oyuncu sayısı: ${updatedCount}\nMevcut metin sonraki işlem için başarıyla hafızaya alındı.`, 'ok');
+    setStatus(`✅ İşlem Tamamlandı!\n\nTemizlenmiş veriler başarıyla kıyaslandı ve kaydedildi.\nSayıları artış gösteren oyuncu sayısı: ${updatedCount}`, 'ok');
 
   } catch (e) { 
     setStatus('❌ Hata:\n' + e.message, 'err'); 
