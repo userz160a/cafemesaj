@@ -121,7 +121,6 @@ export default function Home() {
                             }
                         }
                     }
-
                     if (append) {
                         setData(prev => {
                             const combined = [...prev, ...validData];
@@ -273,11 +272,7 @@ export default function Home() {
         } catch (e) { return '-'; }
     };
 
-    const mappedDataWithIndex = (data || []).map((item, originalIndex) => ({
-        ...item,
-        originalIndex
-    }));
-
+    const mappedDataWithIndex = (data || []).map((item, originalIndex) => ({ ...item, originalIndex }));
     const filteredData = mappedDataWithIndex.filter(item =>
         item && item.nick && item.nick.toLowerCase().includes((search || '').toLowerCase())
     );
@@ -302,16 +297,9 @@ export default function Home() {
     const currentUserData = user ? (data || []).find(item => item && item.nick && item.nick.toLowerCase() === user.toLowerCase()) : null;
 
     const dm = {
-        bg: 'bg-[#0a0c10]',
-        card: 'bg-[#0f1117] border-[#1e2130]',
-        cardHover: 'hover:bg-[#141720]',
-        text: 'text-slate-100',
-        subtext: 'text-slate-400',
-        border: 'border-[#1e2130]',
-        input: 'bg-[#141720] border-[#1e2130] text-white',
-        thead: 'bg-[#0d0f15] text-slate-500 border-[#1e2130]',
-        divide: 'divide-[#1a1d27]',
-        tableCard: 'bg-[#0f1117] border-[#1e2130]',
+        bg: 'bg-[#0a0c10]', card: 'bg-[#0f1117] border-[#1e2130]', text: 'text-slate-100',
+        subtext: 'text-slate-400', border: 'border-[#1e2130]', input: 'bg-[#141720] border-[#1e2130] text-white',
+        divide: 'divide-[#1a1d27]', tableCard: 'bg-[#0f1117] border-[#1e2130]',
     };
 
     return (
@@ -322,30 +310,18 @@ export default function Home() {
                         Cafe Rank
                     </h1>
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setDarkMode(!darkMode)}
-                            className="relative w-16 h-8 flex items-center bg-amber-500 rounded-full p-1 cursor-pointer transition-colors duration-300 outline-none border-none"
-                        >
+                        <button onClick={() => setDarkMode(!darkMode)} className="relative w-16 h-8 flex items-center bg-amber-500 rounded-full p-1 cursor-pointer transition-colors duration-300 outline-none border-none">
                             <div className={`bg-white w-6 h-6 rounded-full shadow-md flex items-center justify-center transition-transform duration-300 ${darkMode ? 'translate-x-8' : 'translate-x-0'}`}>
                                 {darkMode ? <Moon size={14} className="text-amber-500" /> : <Sun size={14} className="text-amber-500" />}
                             </div>
                         </button>
-                        <button
-                            onClick={() => window.open('/chat', '_blank')}
-                            className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
-                        >
+                        <button onClick={() => window.open('/chat', '_blank')} className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}>
                             <MessageCircle size={16} />
                         </button>
-                        <button
-                            onClick={() => { setPage(1); fetchData(1, false); }}
-                            className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}
-                        >
+                        <button onClick={() => { setPage(1); fetchData(1, false); }} className={`p-2 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720] text-white` : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'}`}>
                             <RefreshCw size={16} />
                         </button>
-                        <button
-                            onClick={() => setAutoRefresh(!autoRefresh)}
-                            className={`p-2 rounded-lg border transition flex items-center justify-center ${autoRefresh ? 'bg-green-600 border-green-700 text-white hover:bg-green-700' : 'bg-red-600 border-red-700 text-white hover:bg-red-700'}`}
-                        >
+                        <button onClick={() => setAutoRefresh(!autoRefresh)} className={`p-2 rounded-lg border transition flex items-center justify-center ${autoRefresh ? 'bg-green-600 border-green-700 text-white hover:bg-green-700' : 'bg-red-600 border-red-700 text-white hover:bg-red-700'}`}>
                             {autoRefresh ? <Play size={16} /> : <Square size={16} />}
                         </button>
                         {!user ? (
@@ -356,33 +332,19 @@ export default function Home() {
                             ) : null
                         ) : (
                             <div className="relative" ref={menuRef}>
-                                <button
-                                    onClick={() => setShowAvatarMenu(!showAvatarMenu)}
-                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}
-                                >
-                                    <img
-                                        src={`/api/avatar?name=${encodeURIComponent(user)}`}
-                                        alt={user}
-                                        className="w-6 h-6 rounded-md object-cover"
-                                        onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }}
-                                    />
+                                <button onClick={() => setShowAvatarMenu(!showAvatarMenu)} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition ${darkMode ? `${dm.card} hover:bg-[#141720]` : 'bg-white border-slate-300 hover:bg-slate-100'}`}>
+                                    <img src={`/api/avatar?name=${encodeURIComponent(user)}`} alt={user} className="w-6 h-6 rounded-md object-cover" onError={(e) => { e.target.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23334155'/></svg>"; }} />
                                     <span className="text-xs font-semibold max-w-[120px] truncate">{user}</span>
                                     <ChevronDown size={12} className={`transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`} />
                                 </button>
                                 {showAvatarMenu && (
                                     <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-50 overflow-hidden ${darkMode ? `${dm.card} shadow-black/50` : 'bg-white border-slate-200'}`}>
-                                        <button
-                                            onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setShowAvatarMenu(false); }}
-                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}
-                                        >
+                                        <button onClick={() => { setEditingNote(true); setNoteInput(currentUserData?.note || ''); setShowAvatarMenu(false); }} className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition ${darkMode ? `hover:bg-[#141720] ${dm.text}` : 'hover:bg-slate-50 text-slate-700'}`}>
                                             <Edit3 size={14} />
                                             Not Ekle / Düzenle
                                         </button>
                                         <div className={`border-t ${darkMode ? dm.border : 'border-slate-100'}`} />
-                                        <button
-                                            onClick={handleLogout}
-                                            className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-500 ${darkMode ? 'hover:bg-[#141720]' : 'hover:bg-red-50'}`}
-                                        >
+                                        <button onClick={handleLogout} className={`w-full flex items-center gap-2 px-4 py-3 text-xs font-medium transition text-red-500 ${darkMode ? 'hover:bg-[#141720]' : 'hover:bg-red-50'}`}>
                                             <LogOut size={14} />
                                             Çıkış Yap
                                         </button>
@@ -395,22 +357,11 @@ export default function Home() {
 
                 {editingNote && (
                     <div className={`p-4 rounded-xl border max-w-md ${darkMode ? `${dm.card}` : 'bg-white border-slate-200 shadow-sm'}`}>
-                        <p className="text-xs font-medium mb-2">Notunuz (max 100 karakter, tek satır):</p>
+                        <p className="text-xs font-medium mb-2">Notunuz (max 100 karakter):</p>
                         <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={noteInput}
-                                onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 100))}
-                                placeholder="Notunuzu yazın..."
-                                className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                                autoFocus
-                            />
-                            <button onClick={saveNote} disabled={noteSaving} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition">
-                                <Check size={14} />
-                            </button>
-                            <button onClick={() => setEditingNote(false)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                <X size={14} />
-                            </button>
+                            <input type="text" value={noteInput} onChange={(e) => setNoteInput(e.target.value.replace(/[\r\n]/g, '').substring(0, 100))} placeholder="Notunuzu yazın..." className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`} autoFocus />
+                            <button onClick={saveNote} disabled={noteSaving} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition"><Check size={14} /></button>
+                            <button onClick={() => setEditingNote(false)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}><X size={14} /></button>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">{noteInput.length}/100</p>
                     </div>
@@ -422,24 +373,9 @@ export default function Home() {
                         {loginStep === 'username' ? (
                             <form onSubmit={startLogin} className="flex flex-col gap-2">
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder="Nick#0000"
-                                        value={loginNick}
-                                        onChange={handleLoginNickChange}
-                                        className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`}
-                                        autoFocus
-                                    />
-                                    <button
-                                        type="submit"
-                                        disabled={!isLoginNickValid}
-                                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition text-white ${isLoginNickValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-400 cursor-not-allowed'}`}
-                                    >
-                                        Kod Üret
-                                    </button>
-                                    <button type="button" onClick={() => { setShowLoginForm(false); setLoginNick(''); setIsLoginNickValid(false); }} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                        İptal
-                                    </button>
+                                    <input type="text" placeholder="Nick#0000" value={loginNick} onChange={handleLoginNickChange} className={`flex-1 p-2 rounded-lg border text-xs outline-none ${darkMode ? dm.input : 'bg-slate-50 border-slate-300 text-slate-900'}`} autoFocus />
+                                    <button type="submit" disabled={!isLoginNickValid} className={`px-3 py-2 rounded-lg text-xs font-semibold transition text-white ${isLoginNickValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-400 cursor-not-allowed'}`}>Kod Üret</button>
+                                    <button type="button" onClick={() => { setShowLoginForm(false); setLoginNick(''); setIsLoginNickValid(false); }} className={`px-2 py-2 rounded-lg text-xs font-semibold border ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>İptal</button>
                                 </div>
                                 <p className={`text-[11px] ${isLoginNickValid ? 'text-green-500' : 'text-slate-400'}`}>Format: Nick#0000</p>
                             </form>
@@ -450,9 +386,7 @@ export default function Home() {
                                     !caferank login {generatedCode}
                                 </div>
                                 <p className="text-sm font-bold text-orange-500">Kalan Süre: {timeLeft} saniye</p>
-                                <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); setLoginNick(''); setIsLoginNickValid(false); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
-                                    İptal
-                                </button>
+                                <button type="button" onClick={() => { setLoginStep('username'); setShowLoginForm(false); setGeneratedCode(''); setLoginNick(''); setIsLoginNickValid(false); }} className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border ${darkMode ? `${dm.border} text-slate-300 hover:bg-[#141720]` : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>İptal</button>
                             </div>
                         )}
                     </div>
@@ -485,13 +419,7 @@ export default function Home() {
                 <div className={`rounded-xl border overflow-hidden ${darkMode ? `${dm.tableCard}` : 'bg-white border-slate-200 shadow-sm'}`}>
                     <div className={`p-3 border-b flex items-center gap-3 ${darkMode ? `${dm.border} bg-[#0d0f15]` : 'border-slate-200 bg-slate-50'}`}>
                         <Search className={darkMode ? dm.subtext : 'text-slate-400'} size={16} />
-                        <input
-                            type="text"
-                            placeholder="Kullanıcı adı ara..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className={`bg-transparent border-none outline-none text-sm w-full ${darkMode ? 'text-white placeholder-slate-600' : 'text-slate-900 placeholder-slate-400'}`}
-                        />
+                        <input type="text" placeholder="Kullanıcı adı ara..." value={search} onChange={(e) => setSearch(e.target.value)} className={`bg-transparent border-none outline-none text-sm w-full ${darkMode ? 'text-white placeholder-slate-600' : 'text-slate-900 placeholder-slate-400'}`} />
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-sm">
@@ -523,12 +451,7 @@ export default function Home() {
                                                     </td>
                                                     <td className="p-4">
                                                         {!avatarErrors[item.nick] ? (
-                                                            <img
-                                                                src={`/api/avatar?name=${encodeURIComponent(item.nick)}`}
-                                                                alt={item.nick}
-                                                                className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30"
-                                                                onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))}
-                                                            />
+                                                            <img src={`/api/avatar?name=${encodeURIComponent(item.nick)}`} alt={item.nick} className="w-10 h-10 rounded-lg object-cover bg-slate-700/20 border border-slate-300/30" onError={() => setAvatarErrors(prev => ({ ...prev, [item.nick]: true }))} />
                                                         ) : (
                                                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wider ${darkMode ? 'bg-[#1a1d27] text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
                                                                 {item.nick.substring(0, 3).toUpperCase()}
