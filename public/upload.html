@@ -52,7 +52,6 @@ function parseAndDeduplicate(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const userMap = new Map();
   const blacklistSet = new Set();
-  
   let inBlacklistSection = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -73,33 +72,25 @@ function parseAndDeduplicate(text) {
     }
 
     if (nickMatch) {
-      const username = nickMatch[1];
+      const nick = nickMatch[1];
       
+      if (nick.endsWith('#0000')) {
+        continue;
+      }
+
       let dataLine = "";
       let searchIdx = i + 1;
       
       while (searchIdx < lines.length) {
         const nextLine = lines[searchIdx];
-        
-        if (nextLine.toLowerCase().includes('blacklist')) {
-          break;
-        }
-        if (nextLine === username) {
-          searchIdx++;
-          continue;
-        }
-        if (nextLine.match(/^[0-9]+$/)) {
-          searchIdx++;
-          continue;
-        }
+        if (nextLine.toLowerCase().includes('blacklist')) break;
+        if (nextLine === nick) { searchIdx++; continue; }
+        if (nextLine.match(/^[0-9]+$/)) { searchIdx++; continue; }
         if (nextLine.match(/\d{2}\/\d{2}/) || nextLine.includes('lvl')) {
           dataLine = nextLine;
           break;
         }
-        if (nextLine.match(/[^\s]+#[0-9]{4}/)) {
-          break;
-        }
-        
+        if (nextLine.match(/[^\s]+#[0-9]{4}/)) break;
         dataLine += " " + nextLine;
         searchIdx++;
       }
@@ -107,13 +98,12 @@ function parseAndDeduplicate(text) {
       if (dataLine) {
         const parts = dataLine.trim().split(/\s+/);
         if (parts.length >= 5) {
-          const mesaj = parseInt(parts[0].replace(/\./g, ''), 10);
-          const konu = parseInt(parts[1], 10);
-          const son_gorulme = parts[2] + " " + parts[3];
-          const level = parts[4] + (parts[5] ? " " + parts[5] : "");
+          const messages = parseInt(parts[0].replace(/\./g, ''), 10);
+          const topics = parseInt(parts[1], 10);
+          const last_message = parts[4] + (parts[5] ? " " + parts[5] : "");
 
-          if (!isNaN(mesaj) && !isNaN(konu)) {
-            userMap.set(username, { username, mesaj, konu, son_gorulme, level });
+          if (!isNaN(messages) && !isNaN(topics)) {
+            userMap.set(nick, { nick, messages, topics, last_message });
           }
         }
       }
@@ -143,23 +133,23 @@ async function run() {
 
     setStatus(`Veritabanı kontrol ediliyor... (${cleanData.length} oyuncu)`, 'loading');
 
-    const usernames = cleanData.map(u => u.username);
+    const nicks = cleanData.map(u => u.nick);
     const { data: existingUsers, error: fetchError } = await _supabase
-      .from('oyuncular')
-      .select('username, mesaj, konu, level')
-      .in('username', usernames);
+      .from('stats')
+      .select('nick, messages, topics, last_message')
+      .in('nick', nicks);
 
     if (fetchError) throw fetchError;
 
     const existingMap = new Map();
     if (existingUsers) {
-      existingUsers.forEach(u => existingMap.set(u.username, u));
+      existingUsers.forEach(u => existingMap.set(u.nick, u));
     }
 
     const finalUpsertList = cleanData.filter(user => {
-      const existing = existingMap.get(user.username);
+      const existing = existingMap.get(user.nick);
       if (!existing) return true; 
-      return existing.mesaj !== user.mesaj || existing.konu !== user.konu || existing.level !== user.level;
+      return existing.messages !== user.messages || existing.topics !== user.topics || existing.last_message !== user.last_message;
     });
 
     if (finalUpsertList.length === 0) {
@@ -171,8 +161,8 @@ async function run() {
     setStatus(`${finalUpsertList.length} oyuncunun verisi güncelleniyor...`, 'loading');
 
     const { error: upsertError } = await _supabase
-      .from('oyuncular')
-      .upsert(finalUpsertList, { onConflict: 'username' });
+      .from('stats')
+      .upsert(finalUpsertList, { onConflict: 'nick' });
 
     if (upsertError) throw upsertError;
 
