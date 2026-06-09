@@ -100,19 +100,23 @@ async function run() {
     setStatus('Bir önceki yüklemenin geçmiş verileri (ucube_history) çekiliyor...', 'loading');
     const { data: historyData, error: historyError } = await _supabase
       .from('ucube_history')
-      .select('raw_text')
+      .select('id, raw_text')
       .order('id', { ascending: false })
       .limit(1);
 
     const oldUcubeMap = {};
     let hasHistory = false;
+    let existingHistoryId = null;
 
-    if (!historyError && historyData && historyData.length > 0 && historyData[0].raw_text) {
+    if (!historyError && historyData && historyData.length > 0) {
       hasHistory = true;
-      const parsedOldData = parseAndDeduplicate(historyData[0].raw_text);
-      parsedOldData.forEach(u => {
-        oldUcubeMap[u.nick] = { messages: u.messages, topics: u.topics };
-      });
+      existingHistoryId = historyData[0].id;
+      if (historyData[0].raw_text) {
+        const parsedOldData = parseAndDeduplicate(historyData[0].raw_text);
+        parsedOldData.forEach(u => {
+          oldUcubeMap[u.nick] = { messages: u.messages, topics: u.topics };
+        });
+      }
     }
 
     setStatus('Mevcut Supabase canlı veritabanı kayıtları sorgulanıyor...', 'loading');
@@ -179,10 +183,18 @@ async function run() {
     }
 
     setStatus('Bu veri seti bir sonraki kıyaslama için ucube_history tablosuna kaydediliyor...', 'loading');
-    const { error: saveError } = await _supabase
-      .from('ucube_history')
-      .insert({ raw_text: text, updated_at: new Date().toISOString() });
+    
+    let historyPayload = { raw_text: text, updated_at: new Date().toISOString() };
+    let historyQuery;
 
+    if (existingHistoryId !== null) {
+      historyPayload.id = existingHistoryId;
+      historyQuery = _supabase.from('ucube_history').upsert(historyPayload);
+    } else {
+      historyQuery = _supabase.from('ucube_history').insert(historyPayload);
+    }
+
+    const { error: saveError } = await historyQuery;
     if (saveError) throw saveError;
 
     setStatus(`✅ Kusursuz Şekilde Tamamlandı!\n\nNoktalı büyük sayılar ve ucube çift isim satırları başarıyla temizlendi.\nAktif olarak istatistiği artan/güncellenen oyuncu sayısı: ${updatedCount}`, 'ok');
