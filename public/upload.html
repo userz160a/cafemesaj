@@ -26,7 +26,7 @@
 </head>
 <body>
 <div class="card">
-  <h1>📋 Veri Yükle</h1>
+  <h1>📋 Veri Yükle (Dinamik Fark Hesaplayıcı)</h1>
   <textarea id="txt" placeholder="ucube.cafe → Ctrl+A → Ctrl+C → buraya Ctrl+V"></textarea>
   <div class="btns">
     <button id="btnRun" onclick="run()">▶ Güncelle</button>
@@ -62,6 +62,7 @@ function parseAndDeduplicate(text) {
       continue;
     }
 
+    // Kullanıcı adında mutlaka # karakteri ve 4 haneli sayı kontrolü yapılıyor
     const nickMatch = line.match(/^([^\s]+#[0-9]{4})$/);
 
     if (inBlacklistSection) {
@@ -74,6 +75,7 @@ function parseAndDeduplicate(text) {
     if (nickMatch) {
       const nick = nickMatch[1];
       
+      // #0000 bot hesaplarını filtrele
       if (nick.endsWith('#0000')) {
         continue;
       }
@@ -128,15 +130,16 @@ async function run() {
   try {
     const cleanData = parseAndDeduplicate(text);
     if (cleanData.length === 0) {
-      throw new Error('Metinden hiçbir geçerli oyuncu ayırt edilemedi.');
+      throw new Error('Metinden geçerli bir kullanıcı (# içeren) ayırt edilemedi.');
     }
 
-    setStatus(`Veritabanı kontrol ediliyor... (${cleanData.length} oyuncu)`, 'loading');
+    setStatus(`Veritabanındaki mevcut kullanıcılar kontrol ediliyor...`, 'loading');
 
+    // Mevcut tüm kullanıcı kayıtlarını çekiyoruz
     const nicks = cleanData.map(u => u.nick);
     const { data: existingUsers, error: fetchError } = await _supabase
       .from('stats')
-      .select('nick, messages, topics, last_message')
+      .select('id, nick, messages, topics, last_message')
       .in('nick', nicks);
 
     if (fetchError) throw fetchError;
@@ -146,27 +149,59 @@ async function run() {
       existingUsers.forEach(u => existingMap.set(u.nick, u));
     }
 
-    const finalUpsertList = cleanData.filter(user => {
-      const existing = existingMap.get(user.nick);
-      if (!existing) return true; 
-      return existing.messages !== user.messages || existing.topics !== user.topics || existing.last_message !== user.last_message;
+    const finalUpsertList = [];
+    let updatedCount = 0;
+
+    cleanData.forEach(incomingUser => {
+      const existing = existingMap.get(incomingUser.nick);
+
+      if (existing) {
+        // Eğer veritabanında kullanıcı zaten varsa: FARKI hesapla
+        // Örn: Gelen 1455, Mevcut 1453 ise fark +2 olur. Eğer ucube.cafedeki sayı daha düşük veya eşitse ekleme yapmaz (0 kabul eder)
+        const msgDiff = Math.max(0, incomingUser.messages - existing.messages);
+        const topicDiff = Math.max(0, incomingUser.topics - existing.topics);
+
+        // Sadece en azından bir değişim/artış varsa listeye ekle
+        if (msgDiff > 0 || topicDiff > 0 || existing.last_message !== incomingUser.last_message) {
+          finalUpsertList.push({
+            id: existing.id, // ID eşleşmesi şart
+            nick: incomingUser.nick,
+            messages: existing.messages + msgDiff, // Mevcut olana farkı ekle
+            topics: existing.topics + topicDiff,   // Mevcut olana farkı ekle
+            last_message: incomingUser.last_message,
+            updated_at: new Date().toISOString()
+          });
+          updatedCount++;
+        }
+      } else {
+        // Eğer kullanıcı veritabanında hiç yoksa, sıfırdan ekle
+        finalUpsertList.push({
+          nick: incomingUser.nick,
+          messages: incomingUser.messages,
+          topics: incomingUser.topics,
+          last_message: incomingUser.last_message,
+          updated_at: new Date().toISOString()
+        });
+        updatedCount++;
+      }
     });
 
     if (finalUpsertList.length === 0) {
-      setStatus('✅ Sayıları değişen kimse yok. Tüm veriler zaten güncel.', 'ok');
+      setStatus('✅ İlerleyen/sayısı değişen kimse yok. Tüm veriler zaten güncel.', 'ok');
       btn.disabled = false;
       return;
     }
 
-    setStatus(`${finalUpsertList.length} oyuncunun verisi güncelleniyor...`, 'loading');
+    setStatus(`${finalUpsertList.length} oyuncunun fark verileri sisteme ekleniyor...`, 'loading');
 
+    // Supabase Upsert işlemi
     const { error: upsertError } = await _supabase
       .from('stats')
-      .upsert(finalUpsertList, { onConflict: 'nick' });
+      .upsert(finalUpsertList);
 
     if (upsertError) throw upsertError;
 
-    setStatus(`✅ Başarılı!\nTaranan benzersiz oyuncu: ${cleanData.length}\nSayıları değişen ve güncellenen: ${finalUpsertList.length}`, 'ok');
+    setStatus(`✅ Başarılı!\nTaranan geçerli oyuncu: ${cleanData.length}\nSayıları artan/güncellenen oyuncu: ${updatedCount}`, 'ok');
   } catch (e) { 
     setStatus('❌ Hata:\n' + e.message, 'err'); 
     console.error(e);
