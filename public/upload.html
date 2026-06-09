@@ -49,70 +49,36 @@ function setStatus(msg, type) {
 }
 
 function parseAndDeduplicate(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const userMap = new Map();
   const blacklistSet = new Set();
-  let inBlacklistSection = false;
+  
+  const blacklistParts = text.split(/blacklist/i);
+  const mainContent = blacklistParts[0];
+  const blacklistContent = blacklistParts.slice(1).join(' ');
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.toLowerCase().includes('blacklist')) {
-      inBlacklistSection = true;
-      continue;
-    }
-
-    const nickMatch = line.match(/^([^\s]+#[0-9]{4})$/);
-
-    if (inBlacklistSection) {
-      if (nickMatch) {
-        blacklistSet.add(nickMatch[1]);
-      }
-      continue;
-    }
-
-    if (nickMatch) {
-      const nick = nickMatch[1];
-      
-      if (nick.endsWith('#0000')) {
-        continue;
-      }
-
-      let dataLine = "";
-      let searchIdx = i + 1;
-      
-      while (searchIdx < lines.length) {
-        const nextLine = lines[searchIdx];
-        if (nextLine.toLowerCase().includes('blacklist')) break;
-        if (nextLine === nick) { searchIdx++; continue; }
-        if (nextLine.match(/^[0-9]+$/)) { searchIdx++; continue; }
-        if (nextLine.match(/\d{2}\/\d{2}/) || nextLine.includes('lvl')) {
-          dataLine = nextLine;
-          break;
-        }
-        if (nextLine.match(/[^\s]+#[0-9]{4}/)) break;
-        dataLine += " " + nextLine;
-        searchIdx++;
-      }
-
-      if (dataLine) {
-        const parts = dataLine.trim().split(/\s+/);
-        if (parts.length >= 5) {
-          const messages = parseInt(parts[0].replace(/\./g, ''), 10);
-          const topics = parseInt(parts[1], 10);
-          const last_message = parts[4] + (parts[5] ? " " + parts[5] : "");
-
-          if (!isNaN(messages) && !isNaN(topics)) {
-            userMap.set(nick, { nick, messages, topics, last_message });
-          }
-        }
-      }
-    }
+  const blacklistMatches = blacklistContent.match(/[^\s]+#[0-9]{4}/g);
+  if (blacklistMatches) {
+    blacklistMatches.forEach(nick => blacklistSet.add(nick.trim()));
   }
 
-  blacklistSet.forEach(badUser => {
-    userMap.delete(badUser);
-  });
+  const regex = /([^\s]+#[0-9]{4})\s*([\d.]+)\s*(\d+)\s*(\d{2}\/\d{2}\s+\d{2}:\d{2}|-|(?:\d{2}\/\d{2}))/g;
+  let match;
+
+  while ((match = regex.exec(mainContent)) !== null) {
+    const nick = match[1].trim();
+    
+    if (nick.endsWith('#0000') || blacklistSet.has(nick)) {
+      continue;
+    }
+
+    const messages = parseInt(match[2].replace(/\./g, ''), 10);
+    const topics = parseInt(match[3], 10);
+    const last_message = match[4].trim();
+
+    if (!isNaN(messages) && !isNaN(topics)) {
+      userMap.set(nick, { nick, messages, topics, last_message });
+    }
+  }
 
   return Array.from(userMap.values());
 }
@@ -128,7 +94,7 @@ async function run() {
   try {
     const currentCleanData = parseAndDeduplicate(text);
     if (currentCleanData.length === 0) {
-      throw new Error('Metinden geçerli bir kullanıcı (# içeren) ayırt edilemedi.');
+      throw new Error('Metinden geçerli bir kullanıcı (# içeren) ayırt edilemedi. Lütfen tüm listeyi doğru kopyaladığınızdan emin olun.');
     }
 
     setStatus('Eski ucube verileri veritabanından alınıyor...', 'loading');
