@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veri Yükle</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0c10; color: #e2e8f0; font-family: sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .card { background: #0f1117; border: 1px solid #1e2130; border-radius: 16px; padding: 28px; width: 100%; max-width: 600px; }
+  h1 { font-size: 20px; font-weight: 800; background: linear-gradient(to right, #f97316, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+  textarea { width: 100%; height: 320px; background: #141720; border: 1px solid #1e2130; border-radius: 10px; color: #e2e8f0; font-size: 13px; padding: 12px; resize: vertical; outline: none; font-family: monospace; }
+  textarea:focus { border-color: #f97316; }
+  .btns { display: flex; gap: 10px; margin-top: 14px; }
+  button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+  button:hover { opacity: 0.85; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #btnRun { background: linear-gradient(to right, #f97316, #f59e0b); color: white; }
+  #btnClear { background: #1e2130; color: #94a3b8; flex: 0.4; }
+  #status { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 13px; display: none; }
+  .ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
+  .err { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+  .loading { background: #1e2130; color: #94a3b8; border: 1px solid #2d3748; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📋 Veri Yükle</h1>
+  <textarea id="txt" placeholder="ucube.cafe → Ctrl+A → Ctrl+C → buraya Ctrl+V"></textarea>
+  <div class="btns">
+    <button id="btnRun" onclick="run()">▶ Güncelle</button>
+    <button id="btnClear" onclick="document.getElementById('txt').value='';setStatus('')">Temizle</button>
+  </div>
+  <div id="status"></div>
+</div>
+<script>
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  if (!msg) { el.style.display = 'none'; return; }
+  el.className = type;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+async function run() {
+  const text = document.getElementById('txt').value.trim();
+  if (!text) return setStatus('Metin boş!', 'err');
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true;
+  setStatus('Güncelleniyor...', 'loading');
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const j = await r.json();
+    if (j.ok) setStatus('✅ Tamam! ' + j.parsed + ' kişi parse edildi, ' + j.updated + ' güncellendi.', 'ok');
+    else setStatus('❌ ' + (j.error || 'Hata'), 'err');
+  } catch (e) { setStatus('❌ ' + e.message, 'err'); }
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
